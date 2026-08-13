@@ -1,0 +1,29 @@
+output "vpc_id" {
+  description = "ID of the project VPC."
+  value       = aws_vpc.main.id
+}
+
+output "subnet_id" {
+  description = "ID of the project subnet."
+  value       = aws_subnet.main.id
+}
+
+output "security_group_id" {
+  description = "ID of the EC2 security group."
+  value       = aws_security_group.vm.id
+}
+
+output "instance_id" {
+  description = "ID of the development EC2 instance."
+  value       = aws_instance.vm.id
+}
+
+output "instance_private_ip" {
+  description = "Private IPv4 address assigned to the EC2 instance."
+  value       = aws_instance.vm.private_ip
+}
+
+output "ubuntu_ami_id" {
+  description = "Ubuntu AMI selected dynamically by Terraform."
+  value       = data.aws_ami.ubuntu.id
+}
