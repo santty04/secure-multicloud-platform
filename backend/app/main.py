@@ -1,25 +1,19 @@
-from typing import Literal
-
 from fastapi import FastAPI
-from pydantic import BaseModel
 
+from app.api.router import api_router
+from app.core.config import get_settings
+from app.core.errors import register_exception_handlers
+from app.core.request_context import add_correlation_id
 
-class HealthResponse(BaseModel):
-    status: Literal["ok"]
-
+settings = get_settings()
 
 app = FastAPI(
-    title="Secure Multicloud Platform API",
+    title=settings.app_name,
     description="Backend API for secure multicloud infrastructure management.",
-    version="0.1.0",
+    version=settings.app_version,
+    debug=settings.debug,
 )
 
-
-@app.get(
-    "/health",
-    response_model=HealthResponse,
-    status_code=200,
-    tags=["Health"],
-)
-async def health_check() -> HealthResponse:
-    return HealthResponse(status="ok")
+app.middleware("http")(add_correlation_id)
+register_exception_handlers(app)
+app.include_router(api_router)
