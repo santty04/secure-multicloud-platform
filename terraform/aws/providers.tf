@@ -1,6 +1,5 @@
 provider "aws" {
-  region  = var.aws_region
-  profile = "secure-multicloud"
+  region = var.aws_region
 
   default_tags {
     tags = {
