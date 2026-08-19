@@ -11,6 +11,7 @@
 
 Este documento define las entidades y relaciones iniciales de PostgreSQL para Secure Multicloud Platform.
 
+
 El modelo deberá soportar:
 
 - Identidades de usuario.
