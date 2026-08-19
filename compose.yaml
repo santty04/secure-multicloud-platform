@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: secure_multicloud_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: secure_multicloud
+      POSTGRES_USER: secure_app
+      POSTGRES_PASSWORD: local_development_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U secure_app -d secure_multicloud"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:
