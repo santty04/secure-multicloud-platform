@@ -1,29 +1,22 @@
-variable "location" {
-  description = "Azure region where project resources will be deployed"
-  type        = string
-  default     = "eastus"
-}
-
 variable "project_name" {
-  description = "Name of the project"
+  description = "Nombre del proyecto"
   type        = string
   default     = "secure-multicloud"
 }
 
 variable "environment" {
-  description = "Deployment environment"
+  description = "Entorno de despliegue"
   type        = string
   default     = "dev"
 }
 
-variable "vnet_address_space" {
-  description = "Address space used by the Azure virtual network"
-  type        = list(string)
-  default     = ["10.10.0.0/16"]
+variable "location" {
+  description = "Region de Azure donde se desplegara la infraestructura"
+  type        = string
+  default     = "centralus"
 }
 
-variable "subnet_address_prefixes" {
-  description = "Address prefixes used by the application subnet"
-  type        = list(string)
-  default     = ["10.10.1.0/24"]
+variable "ssh_public_key_path" {
+  description = "Ruta local a la clave publica SSH usada por la VM de Azure"
+  type        = string
 }
