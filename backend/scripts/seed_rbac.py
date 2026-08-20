@@ -48,9 +48,7 @@ def seed_rbac() -> None:
         permissions_by_code: dict[str, Permission] = {}
 
         for code, description in PERMISSIONS.items():
-            permission = db.scalar(
-                select(Permission).where(Permission.code == code)
-            )
+            permission = db.scalar(select(Permission).where(Permission.code == code))
 
             if permission is None:
                 permission = Permission(
@@ -65,9 +63,7 @@ def seed_rbac() -> None:
             permissions_by_code[code] = permission
 
         for role_code, role_data in ROLE_PERMISSIONS.items():
-            role = db.scalar(
-                select(Role).where(Role.code == role_code)
-            )
+            role = db.scalar(select(Role).where(Role.code == role_code))
 
             if role is None:
                 role = Role(
