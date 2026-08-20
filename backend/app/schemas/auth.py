@@ -1,3 +1,5 @@
+import uuid
+
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -13,3 +15,13 @@ class TokenResponse(BaseModel):
 
 class TokenPayload(BaseModel):
     sub: str
+
+
+class CurrentUserResponse(BaseModel):
+    id: uuid.UUID
+    email: EmailStr
+    full_name: str
+    is_active: bool
+    role_code: str
+    role_name: str
+    permissions: list[str]
