@@ -63,3 +63,30 @@ def get_current_user(
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+class PermissionChecker:
+    def __init__(self, required_permission: str) -> None:
+        self.required_permission = required_permission
+
+    def __call__(
+        self,
+        current_user: CurrentUser,
+    ) -> User:
+        user_permissions = {
+            permission.code for permission in current_user.role.permissions
+        }
+
+        if self.required_permission not in user_permissions:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions.",
+            )
+
+        return current_user
+
+
+def require_permission(
+    permission_code: str,
+) -> PermissionChecker:
+    return PermissionChecker(permission_code)

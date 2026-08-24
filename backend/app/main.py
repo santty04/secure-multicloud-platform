@@ -6,6 +6,8 @@ from app.core.errors import register_exception_handlers
 from app.core.request_context import add_correlation_id
 from app.api.routes import auth_router
 
+from app.api.routes import auth_router, instances_router
+
 settings = get_settings()
 
 app = FastAPI(
@@ -17,6 +19,11 @@ app = FastAPI(
 
 app.include_router(
     auth_router,
+    prefix="/api/v1",
+)
+
+app.include_router(
+    instances_router,
     prefix="/api/v1",
 )
 

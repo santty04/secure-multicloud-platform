@@ -22,7 +22,7 @@ test_engine = create_engine(
 )
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session")
 def prepare_test_database() -> Generator[None, None, None]:
     Base.metadata.drop_all(bind=test_engine)
     Base.metadata.create_all(bind=test_engine)
@@ -33,9 +33,12 @@ def prepare_test_database() -> Generator[None, None, None]:
 
 
 @pytest.fixture
-def db_session() -> Generator[Session, None, None]:
+def db_session(
+    prepare_test_database: None,
+) -> Generator[Session, None, None]:
     connection = test_engine.connect()
     transaction = connection.begin()
+
     session = Session(
         bind=connection,
         autoflush=False,
