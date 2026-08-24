@@ -1,10 +1,14 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 
-from app.api.dependencies import require_permission
-from app.db.models import User
+from app.api.dependencies import (
+    DatabaseSession,
+    require_permission,
+)
+from app.db.models import ManagedResource, User
 from app.schemas.managed_instance import (
     CloudProvider,
     InstanceActionResponse,
@@ -39,6 +43,28 @@ CanDeleteInstances = Annotated[
 ]
 
 
+def get_managed_resource(
+    db: DatabaseSession,
+    provider: CloudProvider,
+    resource_id: uuid.UUID,
+) -> ManagedResource:
+    statement = select(ManagedResource).where(
+        ManagedResource.id == resource_id,
+        ManagedResource.provider == provider.value,
+        ManagedResource.is_managed.is_(True),
+    )
+
+    resource = db.scalar(statement)
+
+    if resource is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Resource not found.",
+        )
+
+    return resource
+
+
 @router.get(
     "",
     response_model=list[InstanceSummary],
@@ -46,10 +72,20 @@ CanDeleteInstances = Annotated[
 )
 def list_instances(
     current_user: CanReadInstances,
-) -> list[InstanceSummary]:
+    db: DatabaseSession,
+) -> list[ManagedResource]:
     del current_user
 
-    return []
+    statement = (
+        select(ManagedResource)
+        .where(ManagedResource.is_managed.is_(True))
+        .order_by(
+            ManagedResource.provider,
+            ManagedResource.name,
+        )
+    )
+
+    return list(db.scalars(statement).all())
 
 
 @router.post(
@@ -60,7 +96,10 @@ def start_instance(
     provider: CloudProvider,
     resource_id: uuid.UUID,
     current_user: CanStartInstances,
+    db: DatabaseSession,
 ) -> InstanceActionResponse:
+    get_managed_resource(db, provider, resource_id)
+
     return InstanceActionResponse(
         resource_id=resource_id,
         provider=provider,
@@ -78,7 +117,10 @@ def stop_instance(
     provider: CloudProvider,
     resource_id: uuid.UUID,
     current_user: CanStopInstances,
+    db: DatabaseSession,
 ) -> InstanceActionResponse:
+    get_managed_resource(db, provider, resource_id)
+
     return InstanceActionResponse(
         resource_id=resource_id,
         provider=provider,
@@ -96,7 +138,10 @@ def delete_instance(
     provider: CloudProvider,
     resource_id: uuid.UUID,
     current_user: CanDeleteInstances,
+    db: DatabaseSession,
 ) -> InstanceActionResponse:
+    get_managed_resource(db, provider, resource_id)
+
     return InstanceActionResponse(
         resource_id=resource_id,
         provider=provider,

@@ -1,7 +1,7 @@
 import uuid
 from enum import StrEnum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class CloudProvider(StrEnum):
@@ -21,4 +21,10 @@ class InstanceSummary(BaseModel):
     id: uuid.UUID
     name: str
     provider: CloudProvider
+    resource_type: str
+    region: str
+    environment: str
     status: str
+    is_managed: bool
+
+    model_config = ConfigDict(from_attributes=True)

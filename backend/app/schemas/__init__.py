@@ -1,24 +1,12 @@
-from app.schemas.auth import (
-    CurrentUserResponse,
-    LoginRequest,
-    TokenPayload,
-    TokenResponse,
-)
-from app.schemas.user import UserCreate, UserResponse
-from app.schemas.managed_instance import (
-    CloudProvider,
-    InstanceActionResponse,
-    InstanceSummary,
-)
+from app.db.models.managed_resource import ManagedResource
+from app.db.models.permission import Permission
+from app.db.models.role import Role, role_permissions
+from app.db.models.user import User
 
 __all__ = [
-    "CurrentUserResponse",
-    "LoginRequest",
-    "TokenPayload",
-    "TokenResponse",
-    "UserCreate",
-    "UserResponse",
-    "CloudProvider",
-    "InstanceActionResponse",
-    "InstanceSummary",
+    "ManagedResource",
+    "Permission",
+    "Role",
+    "User",
+    "role_permissions",
 ]
