@@ -3,7 +3,6 @@ from sqlalchemy import select
 from app.db.models import Permission, Role
 from app.db.session import SessionLocal
 
-
 PERMISSIONS = {
     "vm.read": "Listar y consultar máquinas virtuales.",
     "vm.create": "Crear máquinas virtuales.",

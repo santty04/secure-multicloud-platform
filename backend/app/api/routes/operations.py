@@ -30,11 +30,7 @@ def list_operations(
 ) -> list[Operation]:
     del current_user
 
-    statement = (
-        select(Operation)
-        .order_by(Operation.requested_at.desc())
-        .limit(limit)
-    )
+    statement = select(Operation).order_by(Operation.requested_at.desc()).limit(limit)
 
     return list(db.scalars(statement).all())
 
@@ -72,10 +68,6 @@ def list_audit_logs(
 ) -> list[AuditLog]:
     del current_user
 
-    statement = (
-        select(AuditLog)
-        .order_by(AuditLog.created_at.desc())
-        .limit(limit)
-    )
+    statement = select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
 
     return list(db.scalars(statement).all())

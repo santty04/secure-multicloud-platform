@@ -159,9 +159,7 @@ def test_me_rejects_invalid_token(
     assert_error_response(
         response,
         expected_status=401,
-        expected_message=(
-            "Invalid or expired authentication credentials."
-        ),
+        expected_message=("Invalid or expired authentication credentials."),
     )
 
 
@@ -206,9 +204,7 @@ def test_me_rejects_missing_token(
     assert_error_response(
         response,
         expected_status=401,
-        expected_message=(
-            "Invalid or expired authentication credentials."
-        ),
+        expected_message=("Invalid or expired authentication credentials."),
     )
 
 
@@ -227,7 +223,5 @@ def test_me_rejects_token_for_unknown_user(
     assert_error_response(
         response,
         expected_status=401,
-        expected_message=(
-            "Invalid or expired authentication credentials."
-        ),
+        expected_message=("Invalid or expired authentication credentials."),
     )

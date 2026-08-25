@@ -7,7 +7,6 @@ from app.core.security import hash_password
 from app.db.models import Role, User
 from app.db.session import SessionLocal
 
-
 MINIMUM_PASSWORD_LENGTH = 12
 ALLOWED_ROLES = {
     "administrator",
@@ -31,23 +30,17 @@ def request_full_name() -> str:
     full_name = input("User full name: ").strip()
 
     if len(full_name) < 2:
-        raise ValueError(
-            "The full name must contain at least 2 characters."
-        )
+        raise ValueError("The full name must contain at least 2 characters.")
 
     return full_name
 
 
 def request_role_code() -> str:
     available_roles = ", ".join(sorted(ALLOWED_ROLES))
-    role_code = input(
-        f"Role ({available_roles}): "
-    ).strip().lower()
+    role_code = input(f"Role ({available_roles}): ").strip().lower()
 
     if role_code not in ALLOWED_ROLES:
-        raise ValueError(
-            f"Role must be one of: {available_roles}."
-        )
+        raise ValueError(f"Role must be one of: {available_roles}.")
 
     return role_code
 
@@ -61,8 +54,7 @@ def request_password() -> str:
 
     if len(password) < MINIMUM_PASSWORD_LENGTH:
         raise ValueError(
-            "The password must contain at least "
-            f"{MINIMUM_PASSWORD_LENGTH} characters."
+            f"The password must contain at least {MINIMUM_PASSWORD_LENGTH} characters."
         )
 
     return password
@@ -75,23 +67,16 @@ def create_user() -> None:
     password = request_password()
 
     with SessionLocal() as db:
-        existing_user = db.scalar(
-            select(User).where(User.email == email)
-        )
+        existing_user = db.scalar(select(User).where(User.email == email))
 
         if existing_user is not None:
-            raise ValueError(
-                f"A user with the email {email} already exists."
-            )
+            raise ValueError(f"A user with the email {email} already exists.")
 
-        role = db.scalar(
-            select(Role).where(Role.code == role_code)
-        )
+        role = db.scalar(select(Role).where(Role.code == role_code))
 
         if role is None:
             raise RuntimeError(
-                f"Role '{role_code}' not found. "
-                "Run the RBAC seed script first."
+                f"Role '{role_code}' not found. Run the RBAC seed script first."
             )
 
         user = User(

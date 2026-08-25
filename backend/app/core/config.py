@@ -16,8 +16,15 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     jwt_algorithm: str = "HS256"
 
+    # Azure
     azure_subscription_id: str | None = None
     azure_write_enabled: bool = False
+
+    # AWS
+    aws_region: str = "us-east-2"
+    aws_viewer_role_arn: str | None = None
+    aws_operator_role_arn: str | None = None
+    aws_administrator_role_arn: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",

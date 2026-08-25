@@ -6,9 +6,7 @@ from app.core.config import settings
 
 def get_azure_compute_client() -> ComputeManagementClient:
     if not settings.azure_subscription_id:
-        raise RuntimeError(
-            "AZURE_SUBSCRIPTION_ID is not configured."
-        )
+        raise RuntimeError("AZURE_SUBSCRIPTION_ID is not configured.")
 
     credential = AzureCliCredential()
 
@@ -21,35 +19,18 @@ def get_azure_compute_client() -> ComputeManagementClient:
 def parse_virtual_machine_resource_id(
     resource_id: str,
 ) -> tuple[str, str]:
-    parts = [
-        part
-        for part in resource_id.strip("/").split("/")
-        if part
-    ]
+    parts = [part for part in resource_id.strip("/").split("/") if part]
 
-    normalized_parts = [
-        part.lower()
-        for part in parts
-    ]
+    normalized_parts = [part.lower() for part in parts]
 
     try:
-        resource_group_index = normalized_parts.index(
-            "resourcegroups"
-        )
-        virtual_machine_index = normalized_parts.index(
-            "virtualmachines"
-        )
+        resource_group_index = normalized_parts.index("resourcegroups")
+        virtual_machine_index = normalized_parts.index("virtualmachines")
 
-        resource_group_name = parts[
-            resource_group_index + 1
-        ]
-        vm_name = parts[
-            virtual_machine_index + 1
-        ]
+        resource_group_name = parts[resource_group_index + 1]
+        vm_name = parts[virtual_machine_index + 1]
     except (ValueError, IndexError) as exc:
-        raise ValueError(
-            "Invalid Azure virtual machine resource ID."
-        ) from exc
+        raise ValueError("Invalid Azure virtual machine resource ID.") from exc
 
     return resource_group_name, vm_name
 
@@ -57,11 +38,7 @@ def parse_virtual_machine_resource_id(
 def get_virtual_machine(
     cloud_resource_id: str,
 ):
-    resource_group_name, vm_name = (
-        parse_virtual_machine_resource_id(
-            cloud_resource_id
-        )
-    )
+    resource_group_name, vm_name = parse_virtual_machine_resource_id(cloud_resource_id)
 
     client = get_azure_compute_client()
 
@@ -81,12 +58,7 @@ def get_virtual_machine_power_state(
         return "unknown"
 
     for vm_status in vm.instance_view.statuses or []:
-        if (
-            vm_status.code
-            and vm_status.code.startswith(
-                "PowerState/"
-            )
-        ):
+        if vm_status.code and vm_status.code.startswith("PowerState/"):
             return vm_status.code.split(
                 "/",
                 maxsplit=1,
@@ -94,14 +66,11 @@ def get_virtual_machine_power_state(
 
     return "unknown"
 
+
 def start_virtual_machine(
     cloud_resource_id: str,
 ) -> None:
-    resource_group_name, vm_name = (
-        parse_virtual_machine_resource_id(
-            cloud_resource_id
-        )
-    )
+    resource_group_name, vm_name = parse_virtual_machine_resource_id(cloud_resource_id)
 
     client = get_azure_compute_client()
 
@@ -112,14 +81,11 @@ def start_virtual_machine(
 
     poller.result()
 
+
 def stop_virtual_machine(
     cloud_resource_id: str,
 ) -> None:
-    resource_group_name, vm_name = (
-        parse_virtual_machine_resource_id(
-            cloud_resource_id
-        )
-    )
+    resource_group_name, vm_name = parse_virtual_machine_resource_id(cloud_resource_id)
 
     client = get_azure_compute_client()
 

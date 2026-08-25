@@ -8,9 +8,11 @@ from app.api.dependencies import (
     DatabaseSession,
     require_permission,
 )
+from app.cloud.aws.ec2 import list_instances as list_aws_instances
 from app.core.config import settings
 from app.db.models import ManagedResource, User
 from app.schemas.managed_instance import (
+    AWSInstanceSummary,
     CloudProvider,
     InstanceActionResponse,
     InstanceStatusResponse,
@@ -183,9 +185,7 @@ def execute_azure_start_action(
     )
 
     try:
-        start_virtual_machine(
-            resource.cloud_resource_id
-        )
+        start_virtual_machine(resource.cloud_resource_id)
 
         mark_operation_success(
             db,
@@ -246,6 +246,7 @@ def execute_azure_start_action(
         requested_by=current_user.id,
     )
 
+
 def execute_azure_stop_action(
     *,
     request: Request,
@@ -288,9 +289,7 @@ def execute_azure_stop_action(
     )
 
     try:
-        stop_virtual_machine(
-            resource.cloud_resource_id
-        )
+        stop_virtual_machine(resource.cloud_resource_id)
 
         mark_operation_success(
             db,
@@ -376,6 +375,27 @@ def list_instances(
 
 
 @router.get(
+    "/aws/live",
+    response_model=list[AWSInstanceSummary],
+    status_code=status.HTTP_200_OK,
+)
+def list_live_aws_instances(
+    current_user: CanReadInstances,
+) -> list[dict[str, str | None]]:
+    """
+    Return the current AWS EC2 inventory visible to the authenticated
+    application role.
+
+    The application permission vm.read is checked before reaching AWS.
+    The backend then assumes the corresponding AWS IAM role through STS.
+    """
+
+    return list_aws_instances(
+        current_user.role.code,
+    )
+
+
+@router.get(
     "/{provider}/{resource_id}/status",
     response_model=InstanceStatusResponse,
     status_code=status.HTTP_200_OK,
@@ -397,15 +417,10 @@ def get_instance_status(
     if provider is not CloudProvider.AZURE:
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail=(
-                "Real-time status is not implemented "
-                "for this provider."
-            ),
+            detail=("Real-time status is not implemented for this provider."),
         )
 
-    real_status = get_virtual_machine_power_state(
-        resource.cloud_resource_id
-    )
+    real_status = get_virtual_machine_power_state(resource.cloud_resource_id)
 
     return InstanceStatusResponse(
         resource_id=resource.id,
@@ -432,10 +447,7 @@ def start_instance(
         resource_id,
     )
 
-    if (
-        provider is CloudProvider.AZURE
-        and settings.azure_write_enabled
-    ):
+    if provider is CloudProvider.AZURE and settings.azure_write_enabled:
         return execute_azure_start_action(
             request=request,
             db=db,
@@ -471,10 +483,7 @@ def stop_instance(
         resource_id,
     )
 
-    if (
-        provider is CloudProvider.AZURE
-        and settings.azure_write_enabled
-    ):
+    if provider is CloudProvider.AZURE and settings.azure_write_enabled:
         return execute_azure_stop_action(
             request=request,
             db=db,
