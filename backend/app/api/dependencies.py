@@ -1,5 +1,5 @@
-from collections.abc import Callable
 import uuid
+from collections.abc import Callable
 from typing import Annotated
 
 import jwt
@@ -10,9 +10,8 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.security import decode_access_token
 from app.db.models import ManagedResource, Role, User
-from app.services.audit import create_audit_log
 from app.db.session import get_db
-
+from app.services.audit import create_audit_log
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
