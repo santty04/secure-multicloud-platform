@@ -1,7 +1,7 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 
 from app.api.dependencies import (
@@ -15,6 +15,11 @@ from app.schemas.managed_instance import (
     CloudProvider,
     InstanceActionResponse,
     InstanceSummary,
+)
+from app.services.audit import create_audit_log
+from app.services.operations import (
+    create_operation,
+    mark_operation_success,
 )
 
 router = APIRouter(
@@ -64,6 +69,70 @@ def get_managed_resource(
         )
 
     return resource
+
+
+def execute_simulated_action(
+    *,
+    request: Request,
+    db: DatabaseSession,
+    resource: ManagedResource,
+    provider: CloudProvider,
+    action: str,
+    required_permission: str,
+    current_user: User,
+) -> InstanceActionResponse:
+    correlation_id = uuid.UUID(
+        request.state.correlation_id,
+    )
+
+    operation = create_operation(
+        db,
+        correlation_id=correlation_id,
+        user_id=current_user.id,
+        resource_id=resource.id,
+        provider=provider.value,
+        action=action,
+        required_permission=required_permission,
+    )
+
+    create_audit_log(
+        db,
+        correlation_id=correlation_id,
+        operation_id=operation.id,
+        user_id=current_user.id,
+        resource_id=resource.id,
+        provider=provider.value,
+        action=action,
+        decision="allowed",
+        reason_code="permission_granted",
+        required_permission=required_permission,
+        role_code=current_user.role.code,
+        event_type="operation",
+        http_method=request.method,
+        request_path=request.url.path,
+        details={
+            "execution_mode": "simulated",
+        },
+    )
+
+    mark_operation_success(
+        db,
+        operation=operation,
+        result_summary={
+            "execution_mode": "simulated",
+            "resource_name": resource.name,
+        },
+    )
+
+    db.commit()
+
+    return InstanceActionResponse(
+        resource_id=resource.id,
+        provider=provider,
+        action=action,
+        status="simulated",
+        requested_by=current_user.id,
+    )
 
 
 # ============================================================
@@ -130,19 +199,26 @@ def list_live_aws_instances(
     response_model=InstanceActionResponse,
 )
 def start_instance(
+    request: Request,
     provider: CloudProvider,
     resource_id: uuid.UUID,
     current_user: CanStartInstances,
     db: DatabaseSession,
 ) -> InstanceActionResponse:
-    get_managed_resource(db, provider, resource_id)
+    resource = get_managed_resource(
+        db,
+        provider,
+        resource_id,
+    )
 
-    return InstanceActionResponse(
-        resource_id=resource_id,
+    return execute_simulated_action(
+        request=request,
+        db=db,
+        resource=resource,
         provider=provider,
         action="start",
-        status="simulated",
-        requested_by=current_user.id,
+        required_permission="vm.start",
+        current_user=current_user,
     )
 
 
@@ -156,19 +232,26 @@ def start_instance(
     response_model=InstanceActionResponse,
 )
 def stop_instance(
+    request: Request,
     provider: CloudProvider,
     resource_id: uuid.UUID,
     current_user: CanStopInstances,
     db: DatabaseSession,
 ) -> InstanceActionResponse:
-    get_managed_resource(db, provider, resource_id)
+    resource = get_managed_resource(
+        db,
+        provider,
+        resource_id,
+    )
 
-    return InstanceActionResponse(
-        resource_id=resource_id,
+    return execute_simulated_action(
+        request=request,
+        db=db,
+        resource=resource,
         provider=provider,
         action="stop",
-        status="simulated",
-        requested_by=current_user.id,
+        required_permission="vm.stop",
+        current_user=current_user,
     )
 
 
@@ -182,17 +265,24 @@ def stop_instance(
     response_model=InstanceActionResponse,
 )
 def delete_instance(
+    request: Request,
     provider: CloudProvider,
     resource_id: uuid.UUID,
     current_user: CanDeleteInstances,
     db: DatabaseSession,
 ) -> InstanceActionResponse:
-    get_managed_resource(db, provider, resource_id)
+    resource = get_managed_resource(
+        db,
+        provider,
+        resource_id,
+    )
 
-    return InstanceActionResponse(
-        resource_id=resource_id,
+    return execute_simulated_action(
+        request=request,
+        db=db,
+        resource=resource,
         provider=provider,
         action="delete",
-        status="simulated",
-        requested_by=current_user.id,
+        required_permission="vm.delete",
+        current_user=current_user,
     )

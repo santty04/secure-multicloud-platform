@@ -2,11 +2,14 @@ import uuid
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import create_access_token
 from app.db.models import (
+    AuditLog,
     ManagedResource,
+    Operation,
     Permission,
     Role,
     User,
@@ -397,4 +400,206 @@ def test_unauthenticated_user_cannot_list_live_aws_instances(
         response,
         expected_status=401,
         expected_message=("Invalid or expired authentication credentials."),
+    )
+
+
+# ============================================================
+# OPERATIONS AND AUDIT TESTS
+# ============================================================
+
+
+def test_allowed_action_creates_operation_and_audit_log(
+    client: TestClient,
+    operator: User,
+    managed_resource: ManagedResource,
+    db_session: Session,
+):
+    response = client.post(
+        (f"/api/v1/instances/azure/{managed_resource.id}/start"),
+        headers=authorization_header(operator),
+    )
+
+    assert response.status_code == 200
+
+    correlation_id = uuid.UUID(response.headers["X-Correlation-ID"])
+
+    operation = db_session.scalar(
+        select(Operation).where(Operation.correlation_id == correlation_id)
+    )
+
+    assert operation is not None
+    assert operation.user_id == operator.id
+    assert operation.resource_id == managed_resource.id
+    assert operation.provider == "azure"
+    assert operation.action == "start"
+    assert operation.required_permission == "vm.start"
+    assert operation.status == "success"
+    assert operation.completed_at is not None
+    assert operation.error_code is None
+    assert operation.error_message is None
+
+    audit_log = db_session.scalar(
+        select(AuditLog).where(AuditLog.correlation_id == correlation_id)
+    )
+
+    assert audit_log is not None
+    assert audit_log.operation_id == operation.id
+    assert audit_log.user_id == operator.id
+    assert audit_log.resource_id == managed_resource.id
+    assert audit_log.provider == "azure"
+    assert audit_log.action == "start"
+    assert audit_log.decision == "allowed"
+    assert audit_log.reason_code == "permission_granted"
+    assert audit_log.required_permission == "vm.start"
+    assert audit_log.role_code == "operator"
+    assert audit_log.event_type == "operation"
+    assert audit_log.http_method == "POST"
+
+
+def test_denied_action_creates_only_audit_log(
+    client: TestClient,
+    viewer: User,
+    managed_resource: ManagedResource,
+    db_session: Session,
+):
+    response = client.post(
+        (f"/api/v1/instances/azure/{managed_resource.id}/start"),
+        headers=authorization_header(viewer),
+    )
+
+    assert response.status_code == 403
+
+    correlation_id = uuid.UUID(response.headers["X-Correlation-ID"])
+
+    operation = db_session.scalar(
+        select(Operation).where(Operation.correlation_id == correlation_id)
+    )
+
+    assert operation is None
+
+    audit_log = db_session.scalar(
+        select(AuditLog).where(AuditLog.correlation_id == correlation_id)
+    )
+
+    assert audit_log is not None
+    assert audit_log.operation_id is None
+    assert audit_log.user_id == viewer.id
+    assert audit_log.resource_id == managed_resource.id
+    assert audit_log.provider == "azure"
+    assert audit_log.action == "start"
+    assert audit_log.decision == "denied"
+    assert audit_log.reason_code == "permission_denied"
+    assert audit_log.required_permission == "vm.start"
+    assert audit_log.role_code == "viewer"
+    assert audit_log.event_type == "authorization"
+    assert audit_log.http_method == "POST"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/v1/operations",
+        f"/api/v1/operations/{uuid.uuid4()}",
+        "/api/v1/audit-logs",
+    ],
+)
+def test_unauthenticated_user_cannot_read_operation_data(
+    client: TestClient,
+    path: str,
+):
+    response = client.get(path)
+
+    assert response.status_code == 401
+
+
+def test_operator_can_read_operations(
+    client: TestClient,
+    operator: User,
+    managed_resource: ManagedResource,
+):
+    action_response = client.post(
+        (f"/api/v1/instances/azure/{managed_resource.id}/start"),
+        headers=authorization_header(operator),
+    )
+
+    assert action_response.status_code == 200
+
+    correlation_id = action_response.headers["X-Correlation-ID"]
+
+    list_response = client.get(
+        "/api/v1/operations",
+        headers=authorization_header(operator),
+    )
+
+    assert list_response.status_code == 200
+
+    operations = list_response.json()
+
+    operation = next(
+        item for item in operations if item["correlation_id"] == correlation_id
+    )
+
+    assert operation["status"] == "success"
+    assert operation["action"] == "start"
+    assert operation["provider"] == "azure"
+
+    detail_response = client.get(
+        f"/api/v1/operations/{operation['id']}",
+        headers=authorization_header(operator),
+    )
+
+    assert detail_response.status_code == 200
+    assert detail_response.json()["id"] == operation["id"]
+
+
+def test_viewer_can_read_denied_audit_log(
+    client: TestClient,
+    viewer: User,
+    managed_resource: ManagedResource,
+):
+    denied_response = client.post(
+        (f"/api/v1/instances/azure/{managed_resource.id}/start"),
+        headers=authorization_header(viewer),
+    )
+
+    assert denied_response.status_code == 403
+
+    correlation_id = denied_response.headers["X-Correlation-ID"]
+
+    audit_response = client.get(
+        "/api/v1/audit-logs",
+        headers=authorization_header(viewer),
+    )
+
+    assert audit_response.status_code == 200
+
+    audit_logs = audit_response.json()
+
+    audit_log = next(
+        item for item in audit_logs if item["correlation_id"] == correlation_id
+    )
+
+    assert audit_log["decision"] == "denied"
+    assert audit_log["reason_code"] == "permission_denied"
+    assert audit_log["required_permission"] == "vm.start"
+    assert audit_log["role_code"] == "viewer"
+    assert audit_log["operation_id"] is None
+
+
+def test_unknown_operation_is_rejected(
+    client: TestClient,
+    viewer: User,
+):
+    operation_id = uuid.uuid4()
+
+    response = client.get(
+        f"/api/v1/operations/{operation_id}",
+        headers=authorization_header(viewer),
+    )
+
+    assert_error_response(
+        response,
+        expected_status=404,
+        expected_message="Operation not found.",
+        expected_code="resource_not_found",
     )
