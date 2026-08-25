@@ -7,7 +7,6 @@ from app.core.security import hash_password
 from app.db.models import Role, User
 from app.db.session import SessionLocal
 
-
 MINIMUM_PASSWORD_LENGTH = 12
 
 

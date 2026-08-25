@@ -30,6 +30,13 @@ class InstanceSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class InstanceStatusResponse(BaseModel):
+    resource_id: uuid.UUID
+    provider: CloudProvider
+    name: str
+    status: str
+
+
 class AWSInstanceSummary(BaseModel):
     instance_id: str
     name: str

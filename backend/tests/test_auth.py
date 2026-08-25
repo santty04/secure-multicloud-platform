@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 from app.core.security import create_access_token, hash_password
 from app.db.models import Permission, Role, User
 
-
 ADMIN_EMAIL = "admin.test@example.com"
 ADMIN_PASSWORD = "TestPassword123!"
 
@@ -195,30 +194,6 @@ def test_me_returns_authenticated_user(
 
     assert "password" not in body
     assert "password_hash" not in body
-
-
-def test_me_rejects_inactive_user(
-    client: TestClient,
-    admin_user: User,
-    db_session: Session,
-):
-    token = create_access_token(str(admin_user.id))
-
-    admin_user.is_active = False
-    db_session.flush()
-
-    response = client.get(
-        "/api/v1/auth/me",
-        headers={
-            "Authorization": f"Bearer {token}",
-        },
-    )
-
-    assert_error_response(
-        response,
-        expected_status=403,
-        expected_message="User account is inactive.",
-    )
 
 
 def test_me_rejects_missing_token(

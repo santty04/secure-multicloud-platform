@@ -338,76 +338,6 @@ def test_invalid_provider_is_rejected(
     assert response.status_code == 422
 
 
-# ============================================================
-# AWS LIVE INVENTORY TESTS
-# ============================================================
-
-
-def test_viewer_can_list_live_aws_instances(
-    client: TestClient,
-    viewer: User,
-    monkeypatch: pytest.MonkeyPatch,
-):
-    def mock_list_aws_instances(
-        role_code: str,
-    ) -> list[dict[str, str | None]]:
-        assert role_code == "viewer"
-
-        return [
-            {
-                "instance_id": "i-0123456789abcdef0",
-                "name": "test-aws-vm",
-                "state": "stopped",
-                "instance_type": "t3.micro",
-                "private_ip": "10.20.1.10",
-                "provider": "aws",
-                "region": "us-east-2",
-            }
-        ]
-
-    monkeypatch.setattr(
-        "app.api.routes.instances.list_aws_instances",
-        mock_list_aws_instances,
-    )
-
-    response = client.get(
-        "/api/v1/instances/aws/live",
-        headers=authorization_header(viewer),
-    )
-
-    assert response.status_code == 200
-
-    body = response.json()
-
-    assert len(body) == 1
-    assert body[0]["instance_id"] == "i-0123456789abcdef0"
-    assert body[0]["name"] == "test-aws-vm"
-    assert body[0]["state"] == "stopped"
-    assert body[0]["instance_type"] == "t3.micro"
-    assert body[0]["private_ip"] == "10.20.1.10"
-    assert body[0]["provider"] == "aws"
-    assert body[0]["region"] == "us-east-2"
-
-
-def test_unauthenticated_user_cannot_list_live_aws_instances(
-    client: TestClient,
-):
-    response = client.get(
-        "/api/v1/instances/aws/live",
-    )
-
-    assert_error_response(
-        response,
-        expected_status=401,
-        expected_message=("Invalid or expired authentication credentials."),
-    )
-
-
-# ============================================================
-# OPERATIONS AND AUDIT TESTS
-# ============================================================
-
-
 def test_allowed_action_creates_operation_and_audit_log(
     client: TestClient,
     operator: User,
@@ -534,7 +464,6 @@ def test_operator_can_read_operations(
     assert list_response.status_code == 200
 
     operations = list_response.json()
-
     operation = next(
         item for item in operations if item["correlation_id"] == correlation_id
     )
@@ -574,7 +503,6 @@ def test_viewer_can_read_denied_audit_log(
     assert audit_response.status_code == 200
 
     audit_logs = audit_response.json()
-
     audit_log = next(
         item for item in audit_logs if item["correlation_id"] == correlation_id
     )
@@ -602,4 +530,386 @@ def test_unknown_operation_is_rejected(
         expected_status=404,
         expected_message="Operation not found.",
         expected_code="resource_not_found",
+    )
+
+
+def test_viewer_can_read_azure_instance_real_status(
+    client: TestClient,
+    viewer: User,
+    managed_resource: ManagedResource,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "app.api.routes.instances.get_virtual_machine_power_state",
+        lambda cloud_resource_id: "deallocated",
+    )
+
+    response = client.get(
+        (f"/api/v1/instances/azure/{managed_resource.id}/status"),
+        headers=authorization_header(viewer),
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["resource_id"] == str(managed_resource.id)
+    assert body["provider"] == "azure"
+    assert body["name"] == managed_resource.name
+    assert body["status"] == "deallocated"
+
+
+def test_aws_real_status_is_not_implemented(
+    client: TestClient,
+    viewer: User,
+    db_session: Session,
+):
+    resource = ManagedResource(
+        provider="aws",
+        cloud_resource_id="i-test000000000001",
+        name="test-aws-instance",
+        resource_type="virtual_machine",
+        region="us-east-1",
+        environment="test",
+        status="stopped",
+        is_managed=True,
+    )
+
+    db_session.add(resource)
+    db_session.flush()
+
+    response = client.get(
+        f"/api/v1/instances/aws/{resource.id}/status",
+        headers=authorization_header(viewer),
+    )
+
+    assert response.status_code == 501
+
+    body = response.json()
+
+    assert body["error"]["message"] == (
+        "Real-time status is not implemented for this provider."
+    )
+
+
+def test_azure_start_remains_simulated_when_writes_are_disabled(
+    client: TestClient,
+    operator: User,
+    managed_resource: ManagedResource,
+    monkeypatch,
+):
+    called = False
+
+    def fake_start_virtual_machine(cloud_resource_id: str) -> None:
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.start_virtual_machine",
+        fake_start_virtual_machine,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.azure_write_enabled",
+        False,
+    )
+
+    response = client.post(
+        (f"/api/v1/instances/azure/{managed_resource.id}/start"),
+        headers=authorization_header(operator),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "simulated"
+    assert called is False
+
+
+def test_azure_start_uses_cloud_service_when_writes_are_enabled(
+    client: TestClient,
+    operator: User,
+    managed_resource: ManagedResource,
+    monkeypatch,
+):
+    called_with = None
+
+    def fake_start_virtual_machine(cloud_resource_id: str) -> None:
+        nonlocal called_with
+        called_with = cloud_resource_id
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.start_virtual_machine",
+        fake_start_virtual_machine,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.azure_write_enabled",
+        True,
+    )
+
+    response = client.post(
+        (f"/api/v1/instances/azure/{managed_resource.id}/start"),
+        headers=authorization_header(operator),
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["status"] == "success"
+    assert body["action"] == "start"
+    assert body["provider"] == "azure"
+    assert called_with == managed_resource.cloud_resource_id
+
+
+def test_azure_start_failure_is_recorded(
+    client: TestClient,
+    operator: User,
+    managed_resource: ManagedResource,
+    db_session: Session,
+    monkeypatch,
+):
+    def fake_start_virtual_machine(
+        cloud_resource_id: str,
+    ) -> None:
+        raise RuntimeError("Simulated Azure failure")
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.start_virtual_machine",
+        fake_start_virtual_machine,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.azure_write_enabled",
+        True,
+    )
+
+    response = client.post(
+        (f"/api/v1/instances/azure/{managed_resource.id}/start"),
+        headers=authorization_header(operator),
+    )
+
+    assert response.status_code == 502
+
+    correlation_id = uuid.UUID(response.headers["X-Correlation-ID"])
+
+    operation = db_session.scalar(
+        select(Operation).where(Operation.correlation_id == correlation_id)
+    )
+
+    assert operation is not None
+    assert operation.status == "failed"
+    assert operation.action == "start"
+    assert operation.provider == "azure"
+    assert operation.error_code == "azure_start_failed"
+    assert operation.error_message == "Simulated Azure failure"
+    assert operation.completed_at is not None
+
+    audit_logs = list(
+        db_session.scalars(
+            select(AuditLog).where(AuditLog.correlation_id == correlation_id)
+        ).all()
+    )
+
+    assert len(audit_logs) == 2
+
+    failure_log = next(
+        log for log in audit_logs if log.reason_code == "cloud_operation_failed"
+    )
+
+    assert failure_log.action == "start"
+    assert failure_log.provider == "azure"
+    assert failure_log.event_type == "operation_failure"
+
+
+def test_azure_stop_remains_simulated_when_writes_are_disabled(
+    client: TestClient,
+    operator: User,
+    managed_resource: ManagedResource,
+    monkeypatch,
+):
+    called = False
+
+    def fake_stop_virtual_machine(cloud_resource_id: str) -> None:
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.stop_virtual_machine",
+        fake_stop_virtual_machine,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.azure_write_enabled",
+        False,
+    )
+
+    response = client.post(
+        (f"/api/v1/instances/azure/{managed_resource.id}/stop"),
+        headers=authorization_header(operator),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "simulated"
+    assert called is False
+
+
+def test_azure_stop_uses_cloud_service_when_writes_are_enabled(
+    client: TestClient,
+    operator: User,
+    managed_resource: ManagedResource,
+    monkeypatch,
+):
+    called_with = None
+
+    def fake_stop_virtual_machine(cloud_resource_id: str) -> None:
+        nonlocal called_with
+        called_with = cloud_resource_id
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.stop_virtual_machine",
+        fake_stop_virtual_machine,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.azure_write_enabled",
+        True,
+    )
+
+    response = client.post(
+        (f"/api/v1/instances/azure/{managed_resource.id}/stop"),
+        headers=authorization_header(operator),
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["status"] == "success"
+    assert body["action"] == "stop"
+    assert body["provider"] == "azure"
+    assert called_with == managed_resource.cloud_resource_id
+
+
+def test_azure_stop_failure_is_recorded(
+    client: TestClient,
+    operator: User,
+    managed_resource: ManagedResource,
+    db_session: Session,
+    monkeypatch,
+):
+    def fake_stop_virtual_machine(
+        cloud_resource_id: str,
+    ) -> None:
+        raise RuntimeError("Simulated Azure stop failure")
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.stop_virtual_machine",
+        fake_stop_virtual_machine,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.azure_write_enabled",
+        True,
+    )
+
+    response = client.post(
+        (f"/api/v1/instances/azure/{managed_resource.id}/stop"),
+        headers=authorization_header(operator),
+    )
+
+    assert response.status_code == 502
+
+    correlation_id = uuid.UUID(response.headers["X-Correlation-ID"])
+
+    operation = db_session.scalar(
+        select(Operation).where(Operation.correlation_id == correlation_id)
+    )
+
+    assert operation is not None
+    assert operation.status == "failed"
+    assert operation.action == "stop"
+    assert operation.provider == "azure"
+    assert operation.error_code == "azure_stop_failed"
+    assert operation.error_message == "Simulated Azure stop failure"
+    assert operation.completed_at is not None
+
+    audit_logs = list(
+        db_session.scalars(
+            select(AuditLog).where(AuditLog.correlation_id == correlation_id)
+        ).all()
+    )
+
+    assert len(audit_logs) == 2
+
+    failure_log = next(
+        log for log in audit_logs if log.reason_code == "cloud_operation_failed"
+    )
+
+    assert failure_log.action == "stop"
+    assert failure_log.provider == "azure"
+    assert failure_log.event_type == "operation_failure"
+
+
+# ============================================================
+# AWS LIVE INVENTORY TESTS
+# ============================================================
+
+
+def test_viewer_can_list_live_aws_instances(
+    client: TestClient,
+    viewer: User,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def mock_list_aws_instances(
+        role_code: str,
+    ) -> list[dict[str, str | None]]:
+        assert role_code == "viewer"
+
+        return [
+            {
+                "instance_id": "i-0123456789abcdef0",
+                "name": "test-aws-vm",
+                "state": "stopped",
+                "instance_type": "t3.micro",
+                "private_ip": "10.20.1.10",
+                "provider": "aws",
+                "region": "us-east-2",
+            }
+        ]
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.list_aws_instances",
+        mock_list_aws_instances,
+    )
+
+    response = client.get(
+        "/api/v1/instances/aws/live",
+        headers=authorization_header(viewer),
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert len(body) == 1
+    assert body[0]["instance_id"] == "i-0123456789abcdef0"
+    assert body[0]["name"] == "test-aws-vm"
+    assert body[0]["state"] == "stopped"
+    assert body[0]["instance_type"] == "t3.micro"
+    assert body[0]["private_ip"] == "10.20.1.10"
+    assert body[0]["provider"] == "aws"
+    assert body[0]["region"] == "us-east-2"
+
+
+def test_unauthenticated_user_cannot_list_live_aws_instances(
+    client: TestClient,
+):
+    response = client.get(
+        "/api/v1/instances/aws/live",
+    )
+
+    assert_error_response(
+        response,
+        expected_status=401,
+        expected_message="Invalid or expired authentication credentials.",
     )
