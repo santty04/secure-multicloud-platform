@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     jwt_algorithm: str = "HS256"
 
+    azure_subscription_id: str | None = None
+    azure_write_enabled: bool = False
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -28,3 +28,9 @@ class InstanceSummary(BaseModel):
     is_managed: bool
 
     model_config = ConfigDict(from_attributes=True)
+
+class InstanceStatusResponse(BaseModel):
+    resource_id: uuid.UUID
+    provider: CloudProvider
+    name: str
+    status: str
