@@ -17,3 +17,68 @@ output "network_security_group_name" {
   description = "Nombre del Network Security Group"
   value       = azurerm_network_security_group.app.name
 }
+
+output "viewer_identity_id" {
+  description = "Resource ID de la Managed Identity Viewer"
+  value       = azurerm_user_assigned_identity.viewer.id
+}
+
+output "viewer_identity_principal_id" {
+  description = "Principal ID de la Managed Identity Viewer"
+  value       = azurerm_user_assigned_identity.viewer.principal_id
+}
+
+output "viewer_identity_client_id" {
+  description = "Client ID de la Managed Identity Viewer"
+  value       = azurerm_user_assigned_identity.viewer.client_id
+}
+
+output "operator_identity_id" {
+  description = "Resource ID de la Managed Identity Operator"
+  value       = azurerm_user_assigned_identity.operator.id
+}
+
+output "operator_identity_principal_id" {
+  description = "Principal ID de la Managed Identity Operator"
+  value       = azurerm_user_assigned_identity.operator.principal_id
+}
+
+output "operator_identity_client_id" {
+  description = "Client ID de la Managed Identity Operator"
+  value       = azurerm_user_assigned_identity.operator.client_id
+}
+
+output "administrator_identity_id" {
+  description = "Resource ID de la Managed Identity Administrator"
+  value       = azurerm_user_assigned_identity.administrator.id
+}
+
+output "administrator_identity_principal_id" {
+  description = "Principal ID de la Managed Identity Administrator"
+  value       = azurerm_user_assigned_identity.administrator.principal_id
+}
+
+output "administrator_identity_client_id" {
+  description = "Client ID de la Managed Identity Administrator"
+  value       = azurerm_user_assigned_identity.administrator.client_id
+}
+
+output "viewer_role_definition_id" {
+  description = "ID del Custom Role SMP Viewer"
+  value       = azurerm_role_definition.viewer.role_definition_resource_id
+}
+
+output "operator_role_definition_id" {
+  description = "ID del Custom Role SMP Operator"
+  value       = azurerm_role_definition.operator.role_definition_resource_id
+}
+
+output "administrator_role_definition_id" {
+  description = "ID del Custom Role SMP Administrator"
+  value       = azurerm_role_definition.administrator.role_definition_resource_id
+}
+
+output "rbac_scope" {
+  description = "Scope utilizado para las asignaciones RBAC"
+  value       = azurerm_resource_group.main.id
+}
