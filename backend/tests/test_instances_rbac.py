@@ -157,9 +157,7 @@ def test_unauthenticated_user_cannot_list_instances(
     assert_error_response(
         response,
         expected_status=401,
-        expected_message=(
-            "Invalid or expired authentication credentials."
-        ),
+        expected_message=("Invalid or expired authentication credentials."),
     )
 
 
@@ -195,10 +193,7 @@ def test_viewer_cannot_start_instance(
     resource_id = uuid.uuid4()
 
     response = client.post(
-        (
-            f"/api/v1/instances/azure/"
-            f"{resource_id}/start"
-        ),
+        (f"/api/v1/instances/azure/{resource_id}/start"),
         headers=authorization_header(viewer),
     )
 
@@ -215,10 +210,7 @@ def test_operator_can_start_instance(
     managed_resource: ManagedResource,
 ):
     response = client.post(
-        (
-            f"/api/v1/instances/azure/"
-            f"{managed_resource.id}/start"
-        ),
+        (f"/api/v1/instances/azure/{managed_resource.id}/start"),
         headers=authorization_header(operator),
     )
 
@@ -239,10 +231,7 @@ def test_operator_can_stop_instance(
     managed_resource: ManagedResource,
 ):
     response = client.post(
-        (
-            f"/api/v1/instances/azure/"
-            f"{managed_resource.id}/stop"
-        ),
+        (f"/api/v1/instances/azure/{managed_resource.id}/stop"),
         headers=authorization_header(operator),
     )
 
@@ -281,10 +270,7 @@ def test_administrator_can_delete_instance(
     managed_resource: ManagedResource,
 ):
     response = client.delete(
-        (
-            f"/api/v1/instances/azure/"
-            f"{managed_resource.id}"
-        ),
+        (f"/api/v1/instances/azure/{managed_resource.id}"),
         headers=authorization_header(administrator),
     )
 
@@ -306,10 +292,7 @@ def test_unknown_resource_is_rejected(
     resource_id = uuid.uuid4()
 
     response = client.post(
-        (
-            f"/api/v1/instances/azure/"
-            f"{resource_id}/start"
-        ),
+        (f"/api/v1/instances/azure/{resource_id}/start"),
         headers=authorization_header(administrator),
     )
 
@@ -327,10 +310,7 @@ def test_provider_must_match_registered_resource(
     managed_resource: ManagedResource,
 ):
     response = client.post(
-        (
-            f"/api/v1/instances/aws/"
-            f"{managed_resource.id}/start"
-        ),
+        (f"/api/v1/instances/aws/{managed_resource.id}/start"),
         headers=authorization_header(administrator),
     )
 
@@ -348,11 +328,73 @@ def test_invalid_provider_is_rejected(
     managed_resource: ManagedResource,
 ):
     response = client.post(
-        (
-            f"/api/v1/instances/google/"
-            f"{managed_resource.id}/start"
-        ),
+        (f"/api/v1/instances/google/{managed_resource.id}/start"),
         headers=authorization_header(administrator),
     )
 
     assert response.status_code == 422
+
+
+# ============================================================
+# AWS LIVE INVENTORY TESTS
+# ============================================================
+
+
+def test_viewer_can_list_live_aws_instances(
+    client: TestClient,
+    viewer: User,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def mock_list_aws_instances(
+        role_code: str,
+    ) -> list[dict[str, str | None]]:
+        assert role_code == "viewer"
+
+        return [
+            {
+                "instance_id": "i-0123456789abcdef0",
+                "name": "test-aws-vm",
+                "state": "stopped",
+                "instance_type": "t3.micro",
+                "private_ip": "10.20.1.10",
+                "provider": "aws",
+                "region": "us-east-2",
+            }
+        ]
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.list_aws_instances",
+        mock_list_aws_instances,
+    )
+
+    response = client.get(
+        "/api/v1/instances/aws/live",
+        headers=authorization_header(viewer),
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert len(body) == 1
+    assert body[0]["instance_id"] == "i-0123456789abcdef0"
+    assert body[0]["name"] == "test-aws-vm"
+    assert body[0]["state"] == "stopped"
+    assert body[0]["instance_type"] == "t3.micro"
+    assert body[0]["private_ip"] == "10.20.1.10"
+    assert body[0]["provider"] == "aws"
+    assert body[0]["region"] == "us-east-2"
+
+
+def test_unauthenticated_user_cannot_list_live_aws_instances(
+    client: TestClient,
+):
+    response = client.get(
+        "/api/v1/instances/aws/live",
+    )
+
+    assert_error_response(
+        response,
+        expected_status=401,
+        expected_message=("Invalid or expired authentication credentials."),
+    )

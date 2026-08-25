@@ -5,10 +5,13 @@ from app.api.routes.health import router as health_router
 from app.api.routes.instances import router as instances_router
 from app.api.routes.validation import router as validation_router
 
+root_router = APIRouter()
 
-api_router = APIRouter()
+root_router.include_router(health_router)
+root_router.include_router(validation_router)
 
-api_router.include_router(health_router)
-api_router.include_router(validation_router)
-api_router.include_router(auth_router)
-api_router.include_router(instances_router)
+
+api_v1_router = APIRouter()
+
+api_v1_router.include_router(auth_router)
+api_v1_router.include_router(instances_router)

@@ -8,13 +8,14 @@ from app.api.dependencies import (
     DatabaseSession,
     require_permission,
 )
+from app.cloud.aws.ec2 import list_instances as list_aws_instances
 from app.db.models import ManagedResource, User
 from app.schemas.managed_instance import (
+    AWSInstanceSummary,
     CloudProvider,
     InstanceActionResponse,
     InstanceSummary,
 )
-
 
 router = APIRouter(
     prefix="/instances",
@@ -65,6 +66,11 @@ def get_managed_resource(
     return resource
 
 
+# ============================================================
+# MANAGED INSTANCES
+# ============================================================
+
+
 @router.get(
     "",
     response_model=list[InstanceSummary],
@@ -88,6 +94,37 @@ def list_instances(
     return list(db.scalars(statement).all())
 
 
+# ============================================================
+# AWS LIVE INVENTORY
+# ============================================================
+
+
+@router.get(
+    "/aws/live",
+    response_model=list[AWSInstanceSummary],
+    status_code=status.HTTP_200_OK,
+)
+def list_live_aws_instances(
+    current_user: CanReadInstances,
+) -> list[dict[str, str | None]]:
+    """
+    Return the current AWS EC2 inventory visible to the authenticated
+    application role.
+
+    The application permission vm.read is checked before reaching AWS.
+    The backend then assumes the corresponding AWS IAM role through STS.
+    """
+
+    return list_aws_instances(
+        current_user.role.code,
+    )
+
+
+# ============================================================
+# START INSTANCE
+# ============================================================
+
+
 @router.post(
     "/{provider}/{resource_id}/start",
     response_model=InstanceActionResponse,
@@ -109,6 +146,11 @@ def start_instance(
     )
 
 
+# ============================================================
+# STOP INSTANCE
+# ============================================================
+
+
 @router.post(
     "/{provider}/{resource_id}/stop",
     response_model=InstanceActionResponse,
@@ -128,6 +170,11 @@ def stop_instance(
         status="simulated",
         requested_by=current_user.id,
     )
+
+
+# ============================================================
+# DELETE INSTANCE
+# ============================================================
 
 
 @router.delete(

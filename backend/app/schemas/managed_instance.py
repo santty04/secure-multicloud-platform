@@ -28,3 +28,13 @@ class InstanceSummary(BaseModel):
     is_managed: bool
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AWSInstanceSummary(BaseModel):
+    instance_id: str
+    name: str
+    state: str
+    instance_type: str
+    private_ip: str | None
+    provider: str
+    region: str
