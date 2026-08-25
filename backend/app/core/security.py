@@ -1,10 +1,9 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from pwdlib import PasswordHash
 
 from app.core.config import settings
-
 
 password_hash = PasswordHash.recommended()
 
@@ -21,14 +20,14 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def create_access_token(subject: str) -> str:
     """Create a signed JWT access token."""
-    expires_at = datetime.now(timezone.utc) + timedelta(
+    expires_at = datetime.now(UTC) + timedelta(
         minutes=settings.access_token_expire_minutes
     )
 
     payload = {
         "sub": subject,
         "exp": expires_at,
-        "iat": datetime.now(timezone.utc),
+        "iat": datetime.now(UTC),
     }
 
     return jwt.encode(

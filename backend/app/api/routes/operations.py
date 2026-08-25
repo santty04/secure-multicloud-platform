@@ -3,13 +3,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from app.api.dependencies import DatabaseSession, require_permission
 from app.db.models import AuditLog, Operation, User
 from app.schemas.audit_log import AuditLogResponse
 from app.schemas.operation import OperationResponse
-
 
 router = APIRouter(
     tags=["Operations and audit"],

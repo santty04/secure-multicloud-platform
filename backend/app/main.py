@@ -10,7 +10,6 @@ from app.core.config import get_settings
 from app.core.errors import register_exception_handlers
 from app.core.request_context import add_correlation_id
 
-
 settings = get_settings()
 
 app = FastAPI(

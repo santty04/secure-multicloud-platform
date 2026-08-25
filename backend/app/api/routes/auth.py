@@ -11,7 +11,6 @@ from app.schemas.auth import (
     TokenResponse,
 )
 
-
 router = APIRouter(
     prefix="/auth",
     tags=["Authentication"],
