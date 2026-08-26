@@ -29,6 +29,16 @@ resource "azurerm_linux_virtual_machine" "main" {
     azurerm_network_interface.vm.id
   ]
 
+  identity {
+    type = "UserAssigned"
+
+    identity_ids = [
+      azurerm_user_assigned_identity.viewer.id,
+      azurerm_user_assigned_identity.operator.id,
+      azurerm_user_assigned_identity.administrator.id,
+    ]
+  }
+
   disable_password_authentication = true
 
   admin_ssh_key {
