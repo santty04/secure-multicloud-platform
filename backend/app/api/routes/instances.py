@@ -9,6 +9,11 @@ from app.api.dependencies import (
     require_permission,
 )
 from app.cloud.aws.ec2 import list_instances as list_aws_instances
+from app.cloud.azure.compute import (
+    get_virtual_machine_power_state,
+    start_virtual_machine,
+    stop_virtual_machine,
+)
 from app.core.config import settings
 from app.db.models import ManagedResource, User
 from app.schemas.managed_instance import (
@@ -19,11 +24,6 @@ from app.schemas.managed_instance import (
     InstanceSummary,
 )
 from app.services.audit import create_audit_log
-from app.services.azure_compute import (
-    get_virtual_machine_power_state,
-    start_virtual_machine,
-    stop_virtual_machine,
-)
 from app.services.operations import (
     create_operation,
     mark_operation_failed,
@@ -185,7 +185,10 @@ def execute_azure_start_action(
     )
 
     try:
-        start_virtual_machine(resource.cloud_resource_id)
+        start_virtual_machine(
+            resource.cloud_resource_id,
+            current_user.role.code,
+        )
 
         mark_operation_success(
             db,
@@ -289,7 +292,10 @@ def execute_azure_stop_action(
     )
 
     try:
-        stop_virtual_machine(resource.cloud_resource_id)
+        stop_virtual_machine(
+            resource.cloud_resource_id,
+            current_user.role.code,
+        )
 
         mark_operation_success(
             db,
@@ -406,8 +412,6 @@ def get_instance_status(
     current_user: CanReadInstances,
     db: DatabaseSession,
 ) -> InstanceStatusResponse:
-    del current_user
-
     resource = get_managed_resource(
         db,
         provider,
@@ -417,10 +421,16 @@ def get_instance_status(
     if provider is not CloudProvider.AZURE:
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail=("Real-time status is not implemented for this provider."),
+            detail=(
+                "Real-time status is not implemented "
+                "for this provider."
+            ),
         )
 
-    real_status = get_virtual_machine_power_state(resource.cloud_resource_id)
+    real_status = get_virtual_machine_power_state(
+        resource.cloud_resource_id,
+        current_user.role.code,
+    )
 
     return InstanceStatusResponse(
         resource_id=resource.id,
@@ -447,7 +457,10 @@ def start_instance(
         resource_id,
     )
 
-    if provider is CloudProvider.AZURE and settings.azure_write_enabled:
+    if (
+        provider is CloudProvider.AZURE
+        and settings.azure_write_enabled
+    ):
         return execute_azure_start_action(
             request=request,
             db=db,
@@ -483,7 +496,10 @@ def stop_instance(
         resource_id,
     )
 
-    if provider is CloudProvider.AZURE and settings.azure_write_enabled:
+    if (
+        provider is CloudProvider.AZURE
+        and settings.azure_write_enabled
+    ):
         return execute_azure_stop_action(
             request=request,
             db=db,
