@@ -160,7 +160,9 @@ def test_unauthenticated_user_cannot_list_instances(
     assert_error_response(
         response,
         expected_status=401,
-        expected_message=("Invalid or expired authentication credentials."),
+        expected_message=(
+            "Invalid or expired authentication credentials."
+        ),
     )
 
 
@@ -196,7 +198,7 @@ def test_viewer_cannot_start_instance(
     resource_id = uuid.uuid4()
 
     response = client.post(
-        (f"/api/v1/instances/azure/{resource_id}/start"),
+        f"/api/v1/instances/azure/{resource_id}/start",
         headers=authorization_header(viewer),
     )
 
@@ -213,7 +215,7 @@ def test_operator_can_start_instance(
     managed_resource: ManagedResource,
 ):
     response = client.post(
-        (f"/api/v1/instances/azure/{managed_resource.id}/start"),
+        f"/api/v1/instances/azure/{managed_resource.id}/start",
         headers=authorization_header(operator),
     )
 
@@ -234,7 +236,7 @@ def test_operator_can_stop_instance(
     managed_resource: ManagedResource,
 ):
     response = client.post(
-        (f"/api/v1/instances/azure/{managed_resource.id}/stop"),
+        f"/api/v1/instances/azure/{managed_resource.id}/stop",
         headers=authorization_header(operator),
     )
 
@@ -273,7 +275,7 @@ def test_administrator_can_delete_instance(
     managed_resource: ManagedResource,
 ):
     response = client.delete(
-        (f"/api/v1/instances/azure/{managed_resource.id}"),
+        f"/api/v1/instances/azure/{managed_resource.id}",
         headers=authorization_header(administrator),
     )
 
@@ -295,7 +297,7 @@ def test_unknown_resource_is_rejected(
     resource_id = uuid.uuid4()
 
     response = client.post(
-        (f"/api/v1/instances/azure/{resource_id}/start"),
+        f"/api/v1/instances/azure/{resource_id}/start",
         headers=authorization_header(administrator),
     )
 
@@ -313,7 +315,7 @@ def test_provider_must_match_registered_resource(
     managed_resource: ManagedResource,
 ):
     response = client.post(
-        (f"/api/v1/instances/aws/{managed_resource.id}/start"),
+        f"/api/v1/instances/aws/{managed_resource.id}/start",
         headers=authorization_header(administrator),
     )
 
@@ -331,7 +333,7 @@ def test_invalid_provider_is_rejected(
     managed_resource: ManagedResource,
 ):
     response = client.post(
-        (f"/api/v1/instances/google/{managed_resource.id}/start"),
+        f"/api/v1/instances/google/{managed_resource.id}/start",
         headers=authorization_header(administrator),
     )
 
@@ -345,16 +347,20 @@ def test_allowed_action_creates_operation_and_audit_log(
     db_session: Session,
 ):
     response = client.post(
-        (f"/api/v1/instances/azure/{managed_resource.id}/start"),
+        f"/api/v1/instances/azure/{managed_resource.id}/start",
         headers=authorization_header(operator),
     )
 
     assert response.status_code == 200
 
-    correlation_id = uuid.UUID(response.headers["X-Correlation-ID"])
+    correlation_id = uuid.UUID(
+        response.headers["X-Correlation-ID"]
+    )
 
     operation = db_session.scalar(
-        select(Operation).where(Operation.correlation_id == correlation_id)
+        select(Operation).where(
+            Operation.correlation_id == correlation_id
+        )
     )
 
     assert operation is not None
@@ -369,7 +375,9 @@ def test_allowed_action_creates_operation_and_audit_log(
     assert operation.error_message is None
 
     audit_log = db_session.scalar(
-        select(AuditLog).where(AuditLog.correlation_id == correlation_id)
+        select(AuditLog).where(
+            AuditLog.correlation_id == correlation_id
+        )
     )
 
     assert audit_log is not None
@@ -393,22 +401,28 @@ def test_denied_action_creates_only_audit_log(
     db_session: Session,
 ):
     response = client.post(
-        (f"/api/v1/instances/azure/{managed_resource.id}/start"),
+        f"/api/v1/instances/azure/{managed_resource.id}/start",
         headers=authorization_header(viewer),
     )
 
     assert response.status_code == 403
 
-    correlation_id = uuid.UUID(response.headers["X-Correlation-ID"])
+    correlation_id = uuid.UUID(
+        response.headers["X-Correlation-ID"]
+    )
 
     operation = db_session.scalar(
-        select(Operation).where(Operation.correlation_id == correlation_id)
+        select(Operation).where(
+            Operation.correlation_id == correlation_id
+        )
     )
 
     assert operation is None
 
     audit_log = db_session.scalar(
-        select(AuditLog).where(AuditLog.correlation_id == correlation_id)
+        select(AuditLog).where(
+            AuditLog.correlation_id == correlation_id
+        )
     )
 
     assert audit_log is not None
@@ -448,13 +462,15 @@ def test_operator_can_read_operations(
     managed_resource: ManagedResource,
 ):
     action_response = client.post(
-        (f"/api/v1/instances/azure/{managed_resource.id}/start"),
+        f"/api/v1/instances/azure/{managed_resource.id}/start",
         headers=authorization_header(operator),
     )
 
     assert action_response.status_code == 200
 
-    correlation_id = action_response.headers["X-Correlation-ID"]
+    correlation_id = action_response.headers[
+        "X-Correlation-ID"
+    ]
 
     list_response = client.get(
         "/api/v1/operations",
@@ -465,7 +481,9 @@ def test_operator_can_read_operations(
 
     operations = list_response.json()
     operation = next(
-        item for item in operations if item["correlation_id"] == correlation_id
+        item
+        for item in operations
+        if item["correlation_id"] == correlation_id
     )
 
     assert operation["status"] == "success"
@@ -487,13 +505,15 @@ def test_viewer_can_read_denied_audit_log(
     managed_resource: ManagedResource,
 ):
     denied_response = client.post(
-        (f"/api/v1/instances/azure/{managed_resource.id}/start"),
+        f"/api/v1/instances/azure/{managed_resource.id}/start",
         headers=authorization_header(viewer),
     )
 
     assert denied_response.status_code == 403
 
-    correlation_id = denied_response.headers["X-Correlation-ID"]
+    correlation_id = denied_response.headers[
+        "X-Correlation-ID"
+    ]
 
     audit_response = client.get(
         "/api/v1/audit-logs",
@@ -504,7 +524,9 @@ def test_viewer_can_read_denied_audit_log(
 
     audit_logs = audit_response.json()
     audit_log = next(
-        item for item in audit_logs if item["correlation_id"] == correlation_id
+        item
+        for item in audit_logs
+        if item["correlation_id"] == correlation_id
     )
 
     assert audit_log["decision"] == "denied"
@@ -539,13 +561,30 @@ def test_viewer_can_read_azure_instance_real_status(
     managed_resource: ManagedResource,
     monkeypatch,
 ):
+    called_role = None
+
+    def fake_get_virtual_machine_power_state(
+        cloud_resource_id: str,
+        role_code: str,
+    ) -> str:
+        nonlocal called_role
+
+        assert cloud_resource_id == managed_resource.cloud_resource_id
+
+        called_role = role_code
+
+        return "deallocated"
+
     monkeypatch.setattr(
         "app.api.routes.instances.get_virtual_machine_power_state",
-        lambda cloud_resource_id: "deallocated",
+        fake_get_virtual_machine_power_state,
     )
 
     response = client.get(
-        (f"/api/v1/instances/azure/{managed_resource.id}/status"),
+        (
+            f"/api/v1/instances/azure/"
+            f"{managed_resource.id}/status"
+        ),
         headers=authorization_header(viewer),
     )
 
@@ -557,6 +596,8 @@ def test_viewer_can_read_azure_instance_real_status(
     assert body["provider"] == "azure"
     assert body["name"] == managed_resource.name
     assert body["status"] == "deallocated"
+
+    assert called_role == "viewer"
 
 
 def test_aws_real_status_is_not_implemented(
@@ -600,8 +641,14 @@ def test_azure_start_remains_simulated_when_writes_are_disabled(
 ):
     called = False
 
-    def fake_start_virtual_machine(cloud_resource_id: str) -> None:
+    def fake_start_virtual_machine(
+        cloud_resource_id: str,
+        role_code: str,
+    ) -> None:
         nonlocal called
+
+        del cloud_resource_id, role_code
+
         called = True
 
     monkeypatch.setattr(
@@ -615,7 +662,7 @@ def test_azure_start_remains_simulated_when_writes_are_disabled(
     )
 
     response = client.post(
-        (f"/api/v1/instances/azure/{managed_resource.id}/start"),
+        f"/api/v1/instances/azure/{managed_resource.id}/start",
         headers=authorization_header(operator),
     )
 
@@ -631,10 +678,16 @@ def test_azure_start_uses_cloud_service_when_writes_are_enabled(
     monkeypatch,
 ):
     called_with = None
+    called_role = None
 
-    def fake_start_virtual_machine(cloud_resource_id: str) -> None:
-        nonlocal called_with
+    def fake_start_virtual_machine(
+        cloud_resource_id: str,
+        role_code: str,
+    ) -> None:
+        nonlocal called_with, called_role
+
         called_with = cloud_resource_id
+        called_role = role_code
 
     monkeypatch.setattr(
         "app.api.routes.instances.start_virtual_machine",
@@ -647,7 +700,7 @@ def test_azure_start_uses_cloud_service_when_writes_are_enabled(
     )
 
     response = client.post(
-        (f"/api/v1/instances/azure/{managed_resource.id}/start"),
+        f"/api/v1/instances/azure/{managed_resource.id}/start",
         headers=authorization_header(operator),
     )
 
@@ -659,6 +712,7 @@ def test_azure_start_uses_cloud_service_when_writes_are_enabled(
     assert body["action"] == "start"
     assert body["provider"] == "azure"
     assert called_with == managed_resource.cloud_resource_id
+    assert called_role == "operator"
 
 
 def test_azure_start_failure_is_recorded(
@@ -670,8 +724,13 @@ def test_azure_start_failure_is_recorded(
 ):
     def fake_start_virtual_machine(
         cloud_resource_id: str,
+        role_code: str,
     ) -> None:
-        raise RuntimeError("Simulated Azure failure")
+        del cloud_resource_id, role_code
+
+        raise RuntimeError(
+            "Simulated Azure failure"
+        )
 
     monkeypatch.setattr(
         "app.api.routes.instances.start_virtual_machine",
@@ -684,16 +743,20 @@ def test_azure_start_failure_is_recorded(
     )
 
     response = client.post(
-        (f"/api/v1/instances/azure/{managed_resource.id}/start"),
+        f"/api/v1/instances/azure/{managed_resource.id}/start",
         headers=authorization_header(operator),
     )
 
     assert response.status_code == 502
 
-    correlation_id = uuid.UUID(response.headers["X-Correlation-ID"])
+    correlation_id = uuid.UUID(
+        response.headers["X-Correlation-ID"]
+    )
 
     operation = db_session.scalar(
-        select(Operation).where(Operation.correlation_id == correlation_id)
+        select(Operation).where(
+            Operation.correlation_id == correlation_id
+        )
     )
 
     assert operation is not None
@@ -706,14 +769,18 @@ def test_azure_start_failure_is_recorded(
 
     audit_logs = list(
         db_session.scalars(
-            select(AuditLog).where(AuditLog.correlation_id == correlation_id)
+            select(AuditLog).where(
+                AuditLog.correlation_id == correlation_id
+            )
         ).all()
     )
 
     assert len(audit_logs) == 2
 
     failure_log = next(
-        log for log in audit_logs if log.reason_code == "cloud_operation_failed"
+        log
+        for log in audit_logs
+        if log.reason_code == "cloud_operation_failed"
     )
 
     assert failure_log.action == "start"
@@ -729,8 +796,14 @@ def test_azure_stop_remains_simulated_when_writes_are_disabled(
 ):
     called = False
 
-    def fake_stop_virtual_machine(cloud_resource_id: str) -> None:
+    def fake_stop_virtual_machine(
+        cloud_resource_id: str,
+        role_code: str,
+    ) -> None:
         nonlocal called
+
+        del cloud_resource_id, role_code
+
         called = True
 
     monkeypatch.setattr(
@@ -744,7 +817,7 @@ def test_azure_stop_remains_simulated_when_writes_are_disabled(
     )
 
     response = client.post(
-        (f"/api/v1/instances/azure/{managed_resource.id}/stop"),
+        f"/api/v1/instances/azure/{managed_resource.id}/stop",
         headers=authorization_header(operator),
     )
 
@@ -760,10 +833,16 @@ def test_azure_stop_uses_cloud_service_when_writes_are_enabled(
     monkeypatch,
 ):
     called_with = None
+    called_role = None
 
-    def fake_stop_virtual_machine(cloud_resource_id: str) -> None:
-        nonlocal called_with
+    def fake_stop_virtual_machine(
+        cloud_resource_id: str,
+        role_code: str,
+    ) -> None:
+        nonlocal called_with, called_role
+
         called_with = cloud_resource_id
+        called_role = role_code
 
     monkeypatch.setattr(
         "app.api.routes.instances.stop_virtual_machine",
@@ -776,7 +855,7 @@ def test_azure_stop_uses_cloud_service_when_writes_are_enabled(
     )
 
     response = client.post(
-        (f"/api/v1/instances/azure/{managed_resource.id}/stop"),
+        f"/api/v1/instances/azure/{managed_resource.id}/stop",
         headers=authorization_header(operator),
     )
 
@@ -788,6 +867,7 @@ def test_azure_stop_uses_cloud_service_when_writes_are_enabled(
     assert body["action"] == "stop"
     assert body["provider"] == "azure"
     assert called_with == managed_resource.cloud_resource_id
+    assert called_role == "operator"
 
 
 def test_azure_stop_failure_is_recorded(
@@ -799,8 +879,13 @@ def test_azure_stop_failure_is_recorded(
 ):
     def fake_stop_virtual_machine(
         cloud_resource_id: str,
+        role_code: str,
     ) -> None:
-        raise RuntimeError("Simulated Azure stop failure")
+        del cloud_resource_id, role_code
+
+        raise RuntimeError(
+            "Simulated Azure stop failure"
+        )
 
     monkeypatch.setattr(
         "app.api.routes.instances.stop_virtual_machine",
@@ -813,16 +898,20 @@ def test_azure_stop_failure_is_recorded(
     )
 
     response = client.post(
-        (f"/api/v1/instances/azure/{managed_resource.id}/stop"),
+        f"/api/v1/instances/azure/{managed_resource.id}/stop",
         headers=authorization_header(operator),
     )
 
     assert response.status_code == 502
 
-    correlation_id = uuid.UUID(response.headers["X-Correlation-ID"])
+    correlation_id = uuid.UUID(
+        response.headers["X-Correlation-ID"]
+    )
 
     operation = db_session.scalar(
-        select(Operation).where(Operation.correlation_id == correlation_id)
+        select(Operation).where(
+            Operation.correlation_id == correlation_id
+        )
     )
 
     assert operation is not None
@@ -830,19 +919,25 @@ def test_azure_stop_failure_is_recorded(
     assert operation.action == "stop"
     assert operation.provider == "azure"
     assert operation.error_code == "azure_stop_failed"
-    assert operation.error_message == "Simulated Azure stop failure"
+    assert operation.error_message == (
+        "Simulated Azure stop failure"
+    )
     assert operation.completed_at is not None
 
     audit_logs = list(
         db_session.scalars(
-            select(AuditLog).where(AuditLog.correlation_id == correlation_id)
+            select(AuditLog).where(
+                AuditLog.correlation_id == correlation_id
+            )
         ).all()
     )
 
     assert len(audit_logs) == 2
 
     failure_log = next(
-        log for log in audit_logs if log.reason_code == "cloud_operation_failed"
+        log
+        for log in audit_logs
+        if log.reason_code == "cloud_operation_failed"
     )
 
     assert failure_log.action == "stop"
@@ -911,5 +1006,7 @@ def test_unauthenticated_user_cannot_list_live_aws_instances(
     assert_error_response(
         response,
         expected_status=401,
-        expected_message="Invalid or expired authentication credentials.",
+        expected_message=(
+            "Invalid or expired authentication credentials."
+        ),
     )

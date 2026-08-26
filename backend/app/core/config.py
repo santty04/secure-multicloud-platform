@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # Azure
     azure_subscription_id: str | None = None
     azure_write_enabled: bool = False
+    azure_viewer_client_id: str | None = None
+    azure_operator_client_id: str | None = None
+    azure_administrator_client_id: str | None = None
 
     # AWS
     aws_region: str = "us-east-2"
