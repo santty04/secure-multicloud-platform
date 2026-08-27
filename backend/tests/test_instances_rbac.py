@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.cloud.aws.errors import AWSCloudError
 from app.core.security import create_access_token
 from app.db.models import (
     AuditLog,
@@ -1158,7 +1159,10 @@ def test_aws_start_failure_is_recorded(
     ) -> None:
         del instance_id, role_code
 
-        raise RuntimeError("Simulated AWS start failure")
+        raise AWSCloudError(
+            code="aws_access_denied",
+            message="AWS denied the requested operation.",
+        )
 
     monkeypatch.setattr(
         "app.api.routes.instances.start_aws_instance",
@@ -1194,8 +1198,8 @@ def test_aws_start_failure_is_recorded(
     assert operation.provider == "aws"
     assert operation.action == "start"
     assert operation.required_permission == "vm.start"
-    assert operation.error_code == "aws_start_failed"
-    assert operation.error_message == "Simulated AWS start failure"
+    assert operation.error_code == "aws_access_denied"
+    assert operation.error_message == "AWS denied the requested operation."
     assert operation.completed_at is not None
 
     audit_logs = list(
@@ -1362,7 +1366,10 @@ def test_aws_stop_failure_is_recorded(
     ) -> None:
         del instance_id, role_code
 
-        raise RuntimeError("Simulated AWS stop failure")
+        raise AWSCloudError(
+            code="aws_invalid_instance_state",
+            message=("AWS EC2 instance is not in a valid state for this operation."),
+        )
 
     monkeypatch.setattr(
         "app.api.routes.instances.stop_aws_instance",
@@ -1396,8 +1403,10 @@ def test_aws_stop_failure_is_recorded(
     assert operation.provider == "aws"
     assert operation.action == "stop"
     assert operation.required_permission == "vm.stop"
-    assert operation.error_code == "aws_stop_failed"
-    assert operation.error_message == "Simulated AWS stop failure"
+    assert operation.error_code == "aws_invalid_instance_state"
+    assert operation.error_message == (
+        "AWS EC2 instance is not in a valid state for this operation."
+    )
     assert operation.completed_at is not None
 
     audit_logs = list(

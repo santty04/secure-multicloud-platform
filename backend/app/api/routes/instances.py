@@ -20,6 +20,7 @@ from app.cloud.aws.ec2 import (
 from app.cloud.aws.ec2 import (
     stop_instance as stop_aws_instance,
 )
+from app.cloud.aws.errors import AWSCloudError
 from app.cloud.azure.compute import (
     get_virtual_machine_power_state,
     start_virtual_machine,
@@ -343,12 +344,12 @@ def execute_aws_start_action(
 
         db.commit()
 
-    except Exception as exc:
+    except AWSCloudError as exc:
         mark_operation_failed(
             db,
             operation=operation,
-            error_code="aws_start_failed",
-            error_message=str(exc),
+            error_code=exc.code,
+            error_message=exc.message,
             result_summary={
                 "execution_mode": "aws",
                 "resource_name": resource.name,
@@ -373,6 +374,7 @@ def execute_aws_start_action(
             details={
                 "execution_mode": "aws",
                 "error_type": type(exc).__name__,
+                "error_code": exc.code,
             },
         )
 
@@ -567,12 +569,12 @@ def execute_aws_stop_action(
 
         db.commit()
 
-    except Exception as exc:
+    except AWSCloudError as exc:
         mark_operation_failed(
             db,
             operation=operation,
-            error_code="aws_stop_failed",
-            error_message=str(exc),
+            error_code=exc.code,
+            error_message=exc.message,
             result_summary={
                 "execution_mode": "aws",
                 "resource_name": resource.name,
@@ -597,6 +599,7 @@ def execute_aws_stop_action(
             details={
                 "execution_mode": "aws",
                 "error_type": type(exc).__name__,
+                "error_code": exc.code,
             },
         )
 

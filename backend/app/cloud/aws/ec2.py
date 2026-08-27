@@ -1,4 +1,7 @@
+from botocore.exceptions import BotoCoreError, ClientError
+
 from app.cloud.aws.auth import assume_role_session
+from app.cloud.aws.errors import raise_safe_aws_error
 from app.core.config import settings
 
 
@@ -115,20 +118,24 @@ def start_instance(
     Start an AWS EC2 instance using the IAM role associated
     with the authenticated application role.
 
-    AWS IAM policies provide the second authorization layer
-    and restrict operations to managed project instances.
+    Raw boto3/botocore exceptions are translated into sanitized
+    application errors before leaving the cloud service layer.
     """
 
-    session = assume_role_session(role_code)
+    try:
+        session = assume_role_session(role_code)
 
-    ec2_client = session.client(
-        "ec2",
-        region_name=settings.aws_region,
-    )
+        ec2_client = session.client(
+            "ec2",
+            region_name=settings.aws_region,
+        )
 
-    ec2_client.start_instances(
-        InstanceIds=[instance_id],
-    )
+        ec2_client.start_instances(
+            InstanceIds=[instance_id],
+        )
+
+    except (BotoCoreError, ClientError) as exc:
+        raise_safe_aws_error(exc)
 
 
 def stop_instance(
@@ -139,17 +146,21 @@ def stop_instance(
     Stop an AWS EC2 instance using the IAM role associated
     with the authenticated application role.
 
-    AWS IAM policies provide the second authorization layer
-    and restrict operations to managed project instances.
+    Raw boto3/botocore exceptions are translated into sanitized
+    application errors before leaving the cloud service layer.
     """
 
-    session = assume_role_session(role_code)
+    try:
+        session = assume_role_session(role_code)
 
-    ec2_client = session.client(
-        "ec2",
-        region_name=settings.aws_region,
-    )
+        ec2_client = session.client(
+            "ec2",
+            region_name=settings.aws_region,
+        )
 
-    ec2_client.stop_instances(
-        InstanceIds=[instance_id],
-    )
+        ec2_client.stop_instances(
+            InstanceIds=[instance_id],
+        )
+
+    except (BotoCoreError, ClientError) as exc:
+        raise_safe_aws_error(exc)
