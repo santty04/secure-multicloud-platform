@@ -8,7 +8,12 @@ from app.api.dependencies import (
     DatabaseSession,
     require_permission,
 )
-from app.cloud.aws.ec2 import list_instances as list_aws_instances
+from app.cloud.aws.ec2 import (
+    get_instance_state as get_aws_instance_state,
+)
+from app.cloud.aws.ec2 import (
+    list_instances as list_aws_instances,
+)
 from app.cloud.azure.compute import (
     get_virtual_machine_power_state,
     start_virtual_machine,
@@ -417,20 +422,29 @@ def get_instance_status(
         provider,
         resource_id,
     )
-
-    if provider is not CloudProvider.AZURE:
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail=(
-                "Real-time status is not implemented "
-                "for this provider."
-            ),
+    if provider is CloudProvider.AZURE:
+        real_status = get_virtual_machine_power_state(
+            resource.cloud_resource_id,
+            current_user.role.code,
         )
 
-    real_status = get_virtual_machine_power_state(
-        resource.cloud_resource_id,
-        current_user.role.code,
-    )
+    elif provider is CloudProvider.AWS:
+        try:
+            real_status = get_aws_instance_state(
+                resource.cloud_resource_id,
+                current_user.role.code,
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="AWS EC2 instance status lookup failed.",
+            ) from exc
+
+        if real_status is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=("AWS EC2 instance not found or not managed by the platform."),
+            )
 
     return InstanceStatusResponse(
         resource_id=resource.id,
@@ -457,10 +471,7 @@ def start_instance(
         resource_id,
     )
 
-    if (
-        provider is CloudProvider.AZURE
-        and settings.azure_write_enabled
-    ):
+    if provider is CloudProvider.AZURE and settings.azure_write_enabled:
         return execute_azure_start_action(
             request=request,
             db=db,
@@ -496,10 +507,7 @@ def stop_instance(
         resource_id,
     )
 
-    if (
-        provider is CloudProvider.AZURE
-        and settings.azure_write_enabled
-    ):
+    if provider is CloudProvider.AZURE and settings.azure_write_enabled:
         return execute_azure_stop_action(
             request=request,
             db=db,

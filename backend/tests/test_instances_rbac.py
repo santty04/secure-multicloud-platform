@@ -600,17 +600,18 @@ def test_viewer_can_read_azure_instance_real_status(
     assert called_role == "viewer"
 
 
-def test_aws_real_status_is_not_implemented(
+def test_viewer_can_read_aws_instance_real_status(
     client: TestClient,
     viewer: User,
     db_session: Session,
+    monkeypatch,
 ):
     resource = ManagedResource(
         provider="aws",
         cloud_resource_id="i-test000000000001",
         name="test-aws-instance",
         resource_type="virtual_machine",
-        region="us-east-1",
+        region="us-east-2",
         environment="test",
         status="stopped",
         is_managed=True,
@@ -619,17 +620,133 @@ def test_aws_real_status_is_not_implemented(
     db_session.add(resource)
     db_session.flush()
 
+    called_instance_id = None
+    called_role = None
+
+    def fake_get_aws_instance_state(
+        instance_id: str,
+        role_code: str,
+    ) -> str:
+        nonlocal called_instance_id
+        nonlocal called_role
+
+        called_instance_id = instance_id
+        called_role = role_code
+
+        return "stopped"
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.get_aws_instance_state",
+        fake_get_aws_instance_state,
+    )
+
     response = client.get(
         f"/api/v1/instances/aws/{resource.id}/status",
         headers=authorization_header(viewer),
     )
 
-    assert response.status_code == 501
+    assert response.status_code == 200
 
     body = response.json()
 
-    assert body["error"]["message"] == (
-        "Real-time status is not implemented for this provider."
+    assert body["resource_id"] == str(resource.id)
+    assert body["provider"] == "aws"
+    assert body["name"] == resource.name
+    assert body["status"] == "stopped"
+
+    assert called_instance_id == resource.cloud_resource_id
+    assert called_role == "viewer"
+
+
+def test_aws_instance_status_returns_404_when_cloud_resource_is_missing(
+    client: TestClient,
+    viewer: User,
+    db_session: Session,
+    monkeypatch,
+):
+    resource = ManagedResource(
+        provider="aws",
+        cloud_resource_id="i-test000000000002",
+        name="missing-aws-instance",
+        resource_type="virtual_machine",
+        region="us-east-2",
+        environment="test",
+        status="stopped",
+        is_managed=True,
+    )
+
+    db_session.add(resource)
+    db_session.flush()
+
+    def fake_get_aws_instance_state(
+    instance_id: str,
+    role_code: str,
+) -> None:
+        del instance_id, role_code
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.get_aws_instance_state",
+        fake_get_aws_instance_state,
+    )
+
+    response = client.get(
+        f"/api/v1/instances/aws/{resource.id}/status",
+        headers=authorization_header(viewer),
+    )
+
+    assert_error_response(
+        response,
+        expected_status=404,
+        expected_message=(
+            "AWS EC2 instance not found or not managed "
+            "by the platform."
+        ),
+        expected_code="resource_not_found",
+    )
+
+
+def test_aws_instance_status_cloud_failure_returns_502(
+    client: TestClient,
+    viewer: User,
+    db_session: Session,
+    monkeypatch,
+):
+    resource = ManagedResource(
+        provider="aws",
+        cloud_resource_id="i-test000000000003",
+        name="failed-aws-instance",
+        resource_type="virtual_machine",
+        region="us-east-2",
+        environment="test",
+        status="stopped",
+        is_managed=True,
+    )
+
+    db_session.add(resource)
+    db_session.flush()
+
+    def fake_get_aws_instance_state(
+        instance_id: str,
+        role_code: str,
+    ) -> str:
+        del instance_id, role_code
+
+        raise RuntimeError("Simulated AWS failure")
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.get_aws_instance_state",
+        fake_get_aws_instance_state,
+    )
+
+    response = client.get(
+        f"/api/v1/instances/aws/{resource.id}/status",
+        headers=authorization_header(viewer),
+    )
+
+    assert_error_response(
+        response,
+        expected_status=502,
+        expected_message="AWS EC2 instance status lookup failed.",
     )
 
 
