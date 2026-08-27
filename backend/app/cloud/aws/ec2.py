@@ -105,3 +105,51 @@ def get_instance_state(
                 return instance["State"]["Name"]
 
     return None
+
+
+def start_instance(
+    instance_id: str,
+    role_code: str,
+) -> None:
+    """
+    Start an AWS EC2 instance using the IAM role associated
+    with the authenticated application role.
+
+    AWS IAM policies provide the second authorization layer
+    and restrict operations to managed project instances.
+    """
+
+    session = assume_role_session(role_code)
+
+    ec2_client = session.client(
+        "ec2",
+        region_name=settings.aws_region,
+    )
+
+    ec2_client.start_instances(
+        InstanceIds=[instance_id],
+    )
+
+
+def stop_instance(
+    instance_id: str,
+    role_code: str,
+) -> None:
+    """
+    Stop an AWS EC2 instance using the IAM role associated
+    with the authenticated application role.
+
+    AWS IAM policies provide the second authorization layer
+    and restrict operations to managed project instances.
+    """
+
+    session = assume_role_session(role_code)
+
+    ec2_client = session.client(
+        "ec2",
+        region_name=settings.aws_region,
+    )
+
+    ec2_client.stop_instances(
+        InstanceIds=[instance_id],
+    )

@@ -160,9 +160,7 @@ def test_unauthenticated_user_cannot_list_instances(
     assert_error_response(
         response,
         expected_status=401,
-        expected_message=(
-            "Invalid or expired authentication credentials."
-        ),
+        expected_message=("Invalid or expired authentication credentials."),
     )
 
 
@@ -353,14 +351,10 @@ def test_allowed_action_creates_operation_and_audit_log(
 
     assert response.status_code == 200
 
-    correlation_id = uuid.UUID(
-        response.headers["X-Correlation-ID"]
-    )
+    correlation_id = uuid.UUID(response.headers["X-Correlation-ID"])
 
     operation = db_session.scalar(
-        select(Operation).where(
-            Operation.correlation_id == correlation_id
-        )
+        select(Operation).where(Operation.correlation_id == correlation_id)
     )
 
     assert operation is not None
@@ -375,9 +369,7 @@ def test_allowed_action_creates_operation_and_audit_log(
     assert operation.error_message is None
 
     audit_log = db_session.scalar(
-        select(AuditLog).where(
-            AuditLog.correlation_id == correlation_id
-        )
+        select(AuditLog).where(AuditLog.correlation_id == correlation_id)
     )
 
     assert audit_log is not None
@@ -407,22 +399,16 @@ def test_denied_action_creates_only_audit_log(
 
     assert response.status_code == 403
 
-    correlation_id = uuid.UUID(
-        response.headers["X-Correlation-ID"]
-    )
+    correlation_id = uuid.UUID(response.headers["X-Correlation-ID"])
 
     operation = db_session.scalar(
-        select(Operation).where(
-            Operation.correlation_id == correlation_id
-        )
+        select(Operation).where(Operation.correlation_id == correlation_id)
     )
 
     assert operation is None
 
     audit_log = db_session.scalar(
-        select(AuditLog).where(
-            AuditLog.correlation_id == correlation_id
-        )
+        select(AuditLog).where(AuditLog.correlation_id == correlation_id)
     )
 
     assert audit_log is not None
@@ -468,9 +454,7 @@ def test_operator_can_read_operations(
 
     assert action_response.status_code == 200
 
-    correlation_id = action_response.headers[
-        "X-Correlation-ID"
-    ]
+    correlation_id = action_response.headers["X-Correlation-ID"]
 
     list_response = client.get(
         "/api/v1/operations",
@@ -481,9 +465,7 @@ def test_operator_can_read_operations(
 
     operations = list_response.json()
     operation = next(
-        item
-        for item in operations
-        if item["correlation_id"] == correlation_id
+        item for item in operations if item["correlation_id"] == correlation_id
     )
 
     assert operation["status"] == "success"
@@ -511,9 +493,7 @@ def test_viewer_can_read_denied_audit_log(
 
     assert denied_response.status_code == 403
 
-    correlation_id = denied_response.headers[
-        "X-Correlation-ID"
-    ]
+    correlation_id = denied_response.headers["X-Correlation-ID"]
 
     audit_response = client.get(
         "/api/v1/audit-logs",
@@ -524,9 +504,7 @@ def test_viewer_can_read_denied_audit_log(
 
     audit_logs = audit_response.json()
     audit_log = next(
-        item
-        for item in audit_logs
-        if item["correlation_id"] == correlation_id
+        item for item in audit_logs if item["correlation_id"] == correlation_id
     )
 
     assert audit_log["decision"] == "denied"
@@ -581,10 +559,7 @@ def test_viewer_can_read_azure_instance_real_status(
     )
 
     response = client.get(
-        (
-            f"/api/v1/instances/azure/"
-            f"{managed_resource.id}/status"
-        ),
+        (f"/api/v1/instances/azure/{managed_resource.id}/status"),
         headers=authorization_header(viewer),
     )
 
@@ -679,9 +654,9 @@ def test_aws_instance_status_returns_404_when_cloud_resource_is_missing(
     db_session.flush()
 
     def fake_get_aws_instance_state(
-    instance_id: str,
-    role_code: str,
-) -> None:
+        instance_id: str,
+        role_code: str,
+    ) -> None:
         del instance_id, role_code
 
     monkeypatch.setattr(
@@ -697,10 +672,7 @@ def test_aws_instance_status_returns_404_when_cloud_resource_is_missing(
     assert_error_response(
         response,
         expected_status=404,
-        expected_message=(
-            "AWS EC2 instance not found or not managed "
-            "by the platform."
-        ),
+        expected_message=("AWS EC2 instance not found or not managed by the platform."),
         expected_code="resource_not_found",
     )
 
@@ -845,9 +817,7 @@ def test_azure_start_failure_is_recorded(
     ) -> None:
         del cloud_resource_id, role_code
 
-        raise RuntimeError(
-            "Simulated Azure failure"
-        )
+        raise RuntimeError("Simulated Azure failure")
 
     monkeypatch.setattr(
         "app.api.routes.instances.start_virtual_machine",
@@ -866,14 +836,10 @@ def test_azure_start_failure_is_recorded(
 
     assert response.status_code == 502
 
-    correlation_id = uuid.UUID(
-        response.headers["X-Correlation-ID"]
-    )
+    correlation_id = uuid.UUID(response.headers["X-Correlation-ID"])
 
     operation = db_session.scalar(
-        select(Operation).where(
-            Operation.correlation_id == correlation_id
-        )
+        select(Operation).where(Operation.correlation_id == correlation_id)
     )
 
     assert operation is not None
@@ -886,18 +852,14 @@ def test_azure_start_failure_is_recorded(
 
     audit_logs = list(
         db_session.scalars(
-            select(AuditLog).where(
-                AuditLog.correlation_id == correlation_id
-            )
+            select(AuditLog).where(AuditLog.correlation_id == correlation_id)
         ).all()
     )
 
     assert len(audit_logs) == 2
 
     failure_log = next(
-        log
-        for log in audit_logs
-        if log.reason_code == "cloud_operation_failed"
+        log for log in audit_logs if log.reason_code == "cloud_operation_failed"
     )
 
     assert failure_log.action == "start"
@@ -1000,9 +962,7 @@ def test_azure_stop_failure_is_recorded(
     ) -> None:
         del cloud_resource_id, role_code
 
-        raise RuntimeError(
-            "Simulated Azure stop failure"
-        )
+        raise RuntimeError("Simulated Azure stop failure")
 
     monkeypatch.setattr(
         "app.api.routes.instances.stop_virtual_machine",
@@ -1021,14 +981,10 @@ def test_azure_stop_failure_is_recorded(
 
     assert response.status_code == 502
 
-    correlation_id = uuid.UUID(
-        response.headers["X-Correlation-ID"]
-    )
+    correlation_id = uuid.UUID(response.headers["X-Correlation-ID"])
 
     operation = db_session.scalar(
-        select(Operation).where(
-            Operation.correlation_id == correlation_id
-        )
+        select(Operation).where(Operation.correlation_id == correlation_id)
     )
 
     assert operation is not None
@@ -1036,29 +992,426 @@ def test_azure_stop_failure_is_recorded(
     assert operation.action == "stop"
     assert operation.provider == "azure"
     assert operation.error_code == "azure_stop_failed"
-    assert operation.error_message == (
-        "Simulated Azure stop failure"
-    )
+    assert operation.error_message == ("Simulated Azure stop failure")
     assert operation.completed_at is not None
 
     audit_logs = list(
         db_session.scalars(
-            select(AuditLog).where(
-                AuditLog.correlation_id == correlation_id
-            )
+            select(AuditLog).where(AuditLog.correlation_id == correlation_id)
         ).all()
     )
 
     assert len(audit_logs) == 2
 
     failure_log = next(
-        log
-        for log in audit_logs
-        if log.reason_code == "cloud_operation_failed"
+        log for log in audit_logs if log.reason_code == "cloud_operation_failed"
     )
 
     assert failure_log.action == "stop"
     assert failure_log.provider == "azure"
+    assert failure_log.event_type == "operation_failure"
+
+
+# ============================================================
+# AWS START TESTS
+# ============================================================
+
+
+def test_aws_start_remains_simulated_when_writes_are_disabled(
+    client: TestClient,
+    operator: User,
+    db_session: Session,
+    monkeypatch,
+):
+    resource = ManagedResource(
+        provider="aws",
+        cloud_resource_id="i-test000000000010",
+        name="test-aws-start-simulated",
+        resource_type="virtual_machine",
+        region="us-east-2",
+        environment="test",
+        status="stopped",
+        is_managed=True,
+    )
+
+    db_session.add(resource)
+    db_session.flush()
+
+    called = False
+
+    def fake_start_aws_instance(
+        instance_id: str,
+        role_code: str,
+    ) -> None:
+        nonlocal called
+        del instance_id, role_code
+        called = True
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.start_aws_instance",
+        fake_start_aws_instance,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.aws_write_enabled",
+        False,
+    )
+
+    response = client.post(
+        f"/api/v1/instances/aws/{resource.id}/start",
+        headers=authorization_header(operator),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "simulated"
+    assert response.json()["provider"] == "aws"
+    assert response.json()["action"] == "start"
+
+    assert called is False
+
+
+def test_aws_start_uses_cloud_service_when_writes_are_enabled(
+    client: TestClient,
+    operator: User,
+    db_session: Session,
+    monkeypatch,
+):
+    resource = ManagedResource(
+        provider="aws",
+        cloud_resource_id="i-test000000000011",
+        name="test-aws-start-real",
+        resource_type="virtual_machine",
+        region="us-east-2",
+        environment="test",
+        status="stopped",
+        is_managed=True,
+    )
+
+    db_session.add(resource)
+    db_session.flush()
+
+    called_instance_id = None
+    called_role = None
+
+    def fake_start_aws_instance(
+        instance_id: str,
+        role_code: str,
+    ) -> None:
+        nonlocal called_instance_id
+        nonlocal called_role
+
+        called_instance_id = instance_id
+        called_role = role_code
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.start_aws_instance",
+        fake_start_aws_instance,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.aws_write_enabled",
+        True,
+    )
+
+    response = client.post(
+        f"/api/v1/instances/aws/{resource.id}/start",
+        headers=authorization_header(operator),
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["resource_id"] == str(resource.id)
+    assert body["provider"] == "aws"
+    assert body["action"] == "start"
+    assert body["status"] == "success"
+    assert body["requested_by"] == str(operator.id)
+
+    assert called_instance_id == resource.cloud_resource_id
+    assert called_role == "operator"
+
+
+def test_aws_start_failure_is_recorded(
+    client: TestClient,
+    operator: User,
+    db_session: Session,
+    monkeypatch,
+):
+    resource = ManagedResource(
+        provider="aws",
+        cloud_resource_id="i-test000000000012",
+        name="test-aws-start-failure",
+        resource_type="virtual_machine",
+        region="us-east-2",
+        environment="test",
+        status="stopped",
+        is_managed=True,
+    )
+
+    db_session.add(resource)
+    db_session.flush()
+
+    def fake_start_aws_instance(
+        instance_id: str,
+        role_code: str,
+    ) -> None:
+        del instance_id, role_code
+
+        raise RuntimeError("Simulated AWS start failure")
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.start_aws_instance",
+        fake_start_aws_instance,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.aws_write_enabled",
+        True,
+    )
+
+    response = client.post(
+        f"/api/v1/instances/aws/{resource.id}/start",
+        headers=authorization_header(operator),
+    )
+
+    assert response.status_code == 502
+
+    assert_error_response(
+        response,
+        expected_status=502,
+        expected_message="AWS EC2 instance start operation failed.",
+    )
+
+    correlation_id = uuid.UUID(response.headers["X-Correlation-ID"])
+
+    operation = db_session.scalar(
+        select(Operation).where(Operation.correlation_id == correlation_id)
+    )
+
+    assert operation is not None
+    assert operation.status == "failed"
+    assert operation.provider == "aws"
+    assert operation.action == "start"
+    assert operation.required_permission == "vm.start"
+    assert operation.error_code == "aws_start_failed"
+    assert operation.error_message == "Simulated AWS start failure"
+    assert operation.completed_at is not None
+
+    audit_logs = list(
+        db_session.scalars(
+            select(AuditLog).where(AuditLog.correlation_id == correlation_id)
+        ).all()
+    )
+
+    failure_log = next(
+        log for log in audit_logs if log.reason_code == "cloud_operation_failed"
+    )
+
+    assert failure_log.provider == "aws"
+    assert failure_log.action == "start"
+    assert failure_log.event_type == "operation_failure"
+
+
+# ============================================================
+# AWS STOP TESTS
+# ============================================================
+
+
+def test_aws_stop_remains_simulated_when_writes_are_disabled(
+    client: TestClient,
+    operator: User,
+    db_session: Session,
+    monkeypatch,
+):
+    resource = ManagedResource(
+        provider="aws",
+        cloud_resource_id="i-test000000000020",
+        name="test-aws-stop-simulated",
+        resource_type="virtual_machine",
+        region="us-east-2",
+        environment="test",
+        status="running",
+        is_managed=True,
+    )
+
+    db_session.add(resource)
+    db_session.flush()
+
+    called = False
+
+    def fake_stop_aws_instance(
+        instance_id: str,
+        role_code: str,
+    ) -> None:
+        nonlocal called
+        del instance_id, role_code
+        called = True
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.stop_aws_instance",
+        fake_stop_aws_instance,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.aws_write_enabled",
+        False,
+    )
+
+    response = client.post(
+        f"/api/v1/instances/aws/{resource.id}/stop",
+        headers=authorization_header(operator),
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["status"] == "simulated"
+    assert body["provider"] == "aws"
+    assert body["action"] == "stop"
+
+    assert called is False
+
+
+def test_aws_stop_uses_cloud_service_when_writes_are_enabled(
+    client: TestClient,
+    operator: User,
+    db_session: Session,
+    monkeypatch,
+):
+    resource = ManagedResource(
+        provider="aws",
+        cloud_resource_id="i-test000000000021",
+        name="test-aws-stop-real",
+        resource_type="virtual_machine",
+        region="us-east-2",
+        environment="test",
+        status="running",
+        is_managed=True,
+    )
+
+    db_session.add(resource)
+    db_session.flush()
+
+    called_instance_id = None
+    called_role = None
+
+    def fake_stop_aws_instance(
+        instance_id: str,
+        role_code: str,
+    ) -> None:
+        nonlocal called_instance_id
+        nonlocal called_role
+
+        called_instance_id = instance_id
+        called_role = role_code
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.stop_aws_instance",
+        fake_stop_aws_instance,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.aws_write_enabled",
+        True,
+    )
+
+    response = client.post(
+        f"/api/v1/instances/aws/{resource.id}/stop",
+        headers=authorization_header(operator),
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["resource_id"] == str(resource.id)
+    assert body["provider"] == "aws"
+    assert body["action"] == "stop"
+    assert body["status"] == "success"
+    assert body["requested_by"] == str(operator.id)
+
+    assert called_instance_id == resource.cloud_resource_id
+    assert called_role == "operator"
+
+
+def test_aws_stop_failure_is_recorded(
+    client: TestClient,
+    operator: User,
+    db_session: Session,
+    monkeypatch,
+):
+    resource = ManagedResource(
+        provider="aws",
+        cloud_resource_id="i-test000000000022",
+        name="test-aws-stop-failure",
+        resource_type="virtual_machine",
+        region="us-east-2",
+        environment="test",
+        status="running",
+        is_managed=True,
+    )
+
+    db_session.add(resource)
+    db_session.flush()
+
+    def fake_stop_aws_instance(
+        instance_id: str,
+        role_code: str,
+    ) -> None:
+        del instance_id, role_code
+
+        raise RuntimeError("Simulated AWS stop failure")
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.stop_aws_instance",
+        fake_stop_aws_instance,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.aws_write_enabled",
+        True,
+    )
+
+    response = client.post(
+        f"/api/v1/instances/aws/{resource.id}/stop",
+        headers=authorization_header(operator),
+    )
+
+    assert_error_response(
+        response,
+        expected_status=502,
+        expected_message="AWS EC2 instance stop operation failed.",
+    )
+
+    correlation_id = uuid.UUID(response.headers["X-Correlation-ID"])
+
+    operation = db_session.scalar(
+        select(Operation).where(Operation.correlation_id == correlation_id)
+    )
+
+    assert operation is not None
+    assert operation.status == "failed"
+    assert operation.provider == "aws"
+    assert operation.action == "stop"
+    assert operation.required_permission == "vm.stop"
+    assert operation.error_code == "aws_stop_failed"
+    assert operation.error_message == "Simulated AWS stop failure"
+    assert operation.completed_at is not None
+
+    audit_logs = list(
+        db_session.scalars(
+            select(AuditLog).where(AuditLog.correlation_id == correlation_id)
+        ).all()
+    )
+
+    failure_log = next(
+        log for log in audit_logs if log.reason_code == "cloud_operation_failed"
+    )
+
+    assert failure_log.provider == "aws"
+    assert failure_log.action == "stop"
     assert failure_log.event_type == "operation_failure"
 
 
@@ -1123,7 +1476,5 @@ def test_unauthenticated_user_cannot_list_live_aws_instances(
     assert_error_response(
         response,
         expected_status=401,
-        expected_message=(
-            "Invalid or expired authentication credentials."
-        ),
+        expected_message=("Invalid or expired authentication credentials."),
     )
