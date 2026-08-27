@@ -25,6 +25,7 @@ class Settings(BaseSettings):
 
     # AWS
     aws_region: str = "us-east-2"
+    aws_write_enabled: bool = False
     aws_viewer_role_arn: str | None = None
     aws_operator_role_arn: str | None = None
     aws_administrator_role_arn: str | None = None

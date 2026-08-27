@@ -16,7 +16,7 @@ resource "aws_iam_role" "smp_viewer" {
         Effect = "Allow"
 
         Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/secure-multicloud-terraform"
+          AWS = aws_iam_role.smp_backend_execution.arn
         }
 
         Action = "sts:AssumeRole"
@@ -48,7 +48,7 @@ resource "aws_iam_role" "smp_operator" {
         Effect = "Allow"
 
         Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/secure-multicloud-terraform"
+          AWS = aws_iam_role.smp_backend_execution.arn
         }
 
         Action = "sts:AssumeRole"
@@ -80,7 +80,7 @@ resource "aws_iam_role" "smp_administrator" {
         Effect = "Allow"
 
         Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/secure-multicloud-terraform"
+          AWS = aws_iam_role.smp_backend_execution.arn
         }
 
         Action = "sts:AssumeRole"
