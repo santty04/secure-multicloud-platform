@@ -111,18 +111,16 @@ resource "aws_iam_role_policy" "smp_administrator" {
       # ======================================================
 
       {
-        Sid    = "UseCanonicalImages"
+        Sid    = "UseApprovedUbuntuImage"
         Effect = "Allow"
 
-        Action = "ec2:RunInstances"
+        Action = [
+          "ec2:RunInstances"
+        ]
 
-        Resource = "arn:aws:ec2:us-east-2::image/*"
-
-        Condition = {
-          StringEquals = {
-            "ec2:Owner" = "099720109477"
-          }
-        }
+        Resource = [
+          "arn:aws:ec2:us-east-2::image/ami-02c98622c4c3f017d"
+        ]
       },
 
       # ======================================================
