@@ -704,7 +704,10 @@ def test_aws_instance_status_cloud_failure_returns_502(
     ) -> str:
         del instance_id, role_code
 
-        raise RuntimeError("Simulated AWS failure")
+        raise AWSCloudError(
+            code="aws_access_denied",
+            message="AWS denied the requested operation.",
+        )
 
     monkeypatch.setattr(
         "app.api.routes.instances.get_aws_instance_state",
@@ -1427,6 +1430,38 @@ def test_aws_stop_failure_is_recorded(
 # ============================================================
 # AWS LIVE INVENTORY TESTS
 # ============================================================
+
+
+def test_aws_live_inventory_cloud_failure_returns_502(
+    client: TestClient,
+    viewer: User,
+    monkeypatch,
+):
+    def mock_list_aws_instances(
+        role_code: str,
+    ) -> list[dict[str, str | None]]:
+        assert role_code == "viewer"
+
+        raise AWSCloudError(
+            code="aws_access_denied",
+            message="AWS denied the requested operation.",
+        )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.list_aws_instances",
+        mock_list_aws_instances,
+    )
+
+    response = client.get(
+        "/api/v1/instances/aws/live",
+        headers=authorization_header(viewer),
+    )
+
+    assert_error_response(
+        response,
+        expected_status=502,
+        expected_message="AWS EC2 inventory lookup failed.",
+    )
 
 
 def test_viewer_can_list_live_aws_instances(

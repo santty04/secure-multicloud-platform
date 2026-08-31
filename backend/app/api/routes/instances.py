@@ -668,9 +668,16 @@ def list_live_aws_instances(
     The backend then assumes the corresponding AWS IAM role through STS.
     """
 
-    return list_aws_instances(
-        current_user.role.code,
-    )
+    try:
+        return list_aws_instances(
+            current_user.role.code,
+        )
+
+    except AWSCloudError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="AWS EC2 inventory lookup failed.",
+        ) from exc
 
 
 # ============================================================
@@ -708,7 +715,7 @@ def get_instance_status(
                 current_user.role.code,
             )
 
-        except Exception as exc:
+        except AWSCloudError as exc:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail="AWS EC2 instance status lookup failed.",
