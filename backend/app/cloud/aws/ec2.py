@@ -173,3 +173,30 @@ def stop_instance(
 
     except (BotoCoreError, ClientError) as exc:
         raise_safe_aws_error(exc)
+
+
+def terminate_instance(
+    instance_id: str,
+    role_code: str,
+) -> None:
+    """
+    Terminate an AWS EC2 instance using the IAM role associated
+    with the authenticated application role.
+
+    AWS SDK errors are translated into sanitized application errors
+    before leaving the cloud service layer.
+    """
+    try:
+        session = assume_role_session(role_code)
+
+        ec2_client = session.client(
+            "ec2",
+            region_name=settings.aws_region,
+        )
+
+        ec2_client.terminate_instances(
+            InstanceIds=[instance_id],
+        )
+
+    except (BotoCoreError, ClientError) as exc:
+        raise_safe_aws_error(exc)

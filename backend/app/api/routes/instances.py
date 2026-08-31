@@ -20,6 +20,9 @@ from app.cloud.aws.ec2 import (
 from app.cloud.aws.ec2 import (
     stop_instance as stop_aws_instance,
 )
+from app.cloud.aws.ec2 import (
+    terminate_instance as terminate_aws_instance,
+)
 from app.cloud.aws.errors import AWSCloudError
 from app.cloud.azure.compute import (
     get_virtual_machine_power_state,
@@ -620,6 +623,119 @@ def execute_aws_stop_action(
 
 
 # ============================================================
+# AWS DELETE
+# ============================================================
+
+
+def execute_aws_delete_action(
+    *,
+    request: Request,
+    db: DatabaseSession,
+    resource: ManagedResource,
+    current_user: User,
+) -> InstanceActionResponse:
+    correlation_id = uuid.UUID(
+        request.state.correlation_id,
+    )
+
+    operation = create_operation(
+        db,
+        correlation_id=correlation_id,
+        user_id=current_user.id,
+        resource_id=resource.id,
+        provider=CloudProvider.AWS.value,
+        action="delete",
+        required_permission="vm.delete",
+    )
+
+    create_audit_log(
+        db,
+        correlation_id=correlation_id,
+        operation_id=operation.id,
+        user_id=current_user.id,
+        resource_id=resource.id,
+        provider=CloudProvider.AWS.value,
+        action="delete",
+        decision="allowed",
+        reason_code="permission_granted",
+        required_permission="vm.delete",
+        role_code=current_user.role.code,
+        event_type="operation",
+        http_method=request.method,
+        request_path=request.url.path,
+        details={
+            "execution_mode": "aws",
+        },
+    )
+
+    try:
+        terminate_aws_instance(
+            resource.cloud_resource_id,
+            current_user.role.code,
+        )
+
+        mark_operation_success(
+            db,
+            operation=operation,
+            result_summary={
+                "execution_mode": "aws",
+                "resource_name": resource.name,
+            },
+        )
+
+        db.commit()
+
+    except AWSCloudError as exc:
+        mark_operation_failed(
+            db,
+            operation=operation,
+            error_code=exc.code,
+            error_message=exc.message,
+            result_summary={
+                "execution_mode": "aws",
+                "resource_name": resource.name,
+            },
+        )
+
+        create_audit_log(
+            db,
+            correlation_id=correlation_id,
+            operation_id=operation.id,
+            user_id=current_user.id,
+            resource_id=resource.id,
+            provider=CloudProvider.AWS.value,
+            action="delete",
+            decision="allowed",
+            reason_code="cloud_operation_failed",
+            required_permission="vm.delete",
+            role_code=current_user.role.code,
+            event_type="operation_failure",
+            http_method=request.method,
+            request_path=request.url.path,
+            details={
+                "execution_mode": "aws",
+                "error_type": type(exc).__name__,
+                "error_code": exc.code,
+            },
+        )
+
+        db.commit()
+
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="AWS EC2 instance delete operation failed.",
+        ) from exc
+
+    return InstanceActionResponse(
+        resource_id=resource.id,
+        provider=CloudProvider.AWS,
+        action="delete",
+        status="success",
+        requested_by=current_user.id,
+    )
+
+
+# ============================================================
 # LIST MANAGED INSTANCES
 # ============================================================
 
@@ -854,6 +970,14 @@ def delete_instance(
         provider,
         resource_id,
     )
+
+    if provider is CloudProvider.AWS and settings.aws_write_enabled:
+        return execute_aws_delete_action(
+            request=request,
+            db=db,
+            resource=resource,
+            current_user=current_user,
+        )
 
     return execute_simulated_action(
         request=request,
