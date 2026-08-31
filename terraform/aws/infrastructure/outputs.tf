@@ -13,16 +13,6 @@ output "security_group_id" {
   value       = aws_security_group.vm.id
 }
 
-output "instance_id" {
-  description = "ID of the development EC2 instance."
-  value       = aws_instance.vm.id
-}
-
-output "instance_private_ip" {
-  description = "Private IPv4 address assigned to the EC2 instance."
-  value       = aws_instance.vm.private_ip
-}
-
 output "ubuntu_ami_id" {
   description = "Ubuntu AMI selected dynamically by Terraform."
   value       = data.aws_ami.ubuntu.id
