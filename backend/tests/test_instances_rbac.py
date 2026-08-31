@@ -1426,6 +1426,220 @@ def test_aws_stop_failure_is_recorded(
     assert failure_log.action == "stop"
     assert failure_log.event_type == "operation_failure"
 
+    # ============================================================
+
+
+# AWS DELETE TESTS
+# ============================================================
+
+
+def test_aws_delete_remains_simulated_when_writes_are_disabled(
+    client: TestClient,
+    administrator: User,
+    db_session: Session,
+    monkeypatch,
+):
+    resource = ManagedResource(
+        provider="aws",
+        cloud_resource_id="i-test000000000030",
+        name="test-aws-delete-simulated",
+        resource_type="virtual_machine",
+        region="us-east-2",
+        environment="test",
+        status="stopped",
+        is_managed=True,
+    )
+
+    db_session.add(resource)
+    db_session.flush()
+
+    called = False
+
+    def fake_terminate_aws_instance(
+        instance_id: str,
+        role_code: str,
+    ) -> None:
+        nonlocal called
+        del instance_id, role_code
+        called = True
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.terminate_aws_instance",
+        fake_terminate_aws_instance,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.aws_write_enabled",
+        False,
+    )
+
+    response = client.delete(
+        f"/api/v1/instances/aws/{resource.id}",
+        headers=authorization_header(administrator),
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["resource_id"] == str(resource.id)
+    assert body["provider"] == "aws"
+    assert body["action"] == "delete"
+    assert body["status"] == "simulated"
+    assert body["requested_by"] == str(administrator.id)
+
+    assert called is False
+
+
+def test_aws_delete_uses_cloud_service_when_writes_are_enabled(
+    client: TestClient,
+    administrator: User,
+    db_session: Session,
+    monkeypatch,
+):
+    resource = ManagedResource(
+        provider="aws",
+        cloud_resource_id="i-test000000000031",
+        name="test-aws-delete-real",
+        resource_type="virtual_machine",
+        region="us-east-2",
+        environment="test",
+        status="stopped",
+        is_managed=True,
+    )
+
+    db_session.add(resource)
+    db_session.flush()
+
+    called_instance_id = None
+    called_role = None
+
+    def fake_terminate_aws_instance(
+        instance_id: str,
+        role_code: str,
+    ) -> None:
+        nonlocal called_instance_id
+        nonlocal called_role
+
+        called_instance_id = instance_id
+        called_role = role_code
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.terminate_aws_instance",
+        fake_terminate_aws_instance,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.aws_write_enabled",
+        True,
+    )
+
+    response = client.delete(
+        f"/api/v1/instances/aws/{resource.id}",
+        headers=authorization_header(administrator),
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["resource_id"] == str(resource.id)
+    assert body["provider"] == "aws"
+    assert body["action"] == "delete"
+    assert body["status"] == "success"
+    assert body["requested_by"] == str(administrator.id)
+
+    assert called_instance_id == resource.cloud_resource_id
+    assert called_role == "administrator"
+
+
+def test_aws_delete_failure_is_recorded(
+    client: TestClient,
+    administrator: User,
+    db_session: Session,
+    monkeypatch,
+):
+    resource = ManagedResource(
+        provider="aws",
+        cloud_resource_id="i-test000000000032",
+        name="test-aws-delete-failure",
+        resource_type="virtual_machine",
+        region="us-east-2",
+        environment="test",
+        status="stopped",
+        is_managed=True,
+    )
+
+    db_session.add(resource)
+    db_session.flush()
+
+    def fake_terminate_aws_instance(
+        instance_id: str,
+        role_code: str,
+    ) -> None:
+        del instance_id, role_code
+
+        raise AWSCloudError(
+            code="aws_access_denied",
+            message="AWS denied the requested operation.",
+        )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.terminate_aws_instance",
+        fake_terminate_aws_instance,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.aws_write_enabled",
+        True,
+    )
+
+    response = client.delete(
+        f"/api/v1/instances/aws/{resource.id}",
+        headers=authorization_header(administrator),
+    )
+
+    assert_error_response(
+        response,
+        expected_status=502,
+        expected_message="AWS EC2 instance delete operation failed.",
+    )
+
+    correlation_id = uuid.UUID(
+        response.headers["X-Correlation-ID"],
+    )
+
+    operation = db_session.scalar(
+        select(Operation).where(
+            Operation.correlation_id == correlation_id,
+        )
+    )
+
+    assert operation is not None
+    assert operation.status == "failed"
+    assert operation.provider == "aws"
+    assert operation.action == "delete"
+    assert operation.required_permission == "vm.delete"
+    assert operation.error_code == "aws_access_denied"
+    assert operation.error_message == "AWS denied the requested operation."
+    assert operation.completed_at is not None
+
+    audit_logs = list(
+        db_session.scalars(
+            select(AuditLog).where(
+                AuditLog.correlation_id == correlation_id,
+            )
+        ).all()
+    )
+
+    failure_log = next(
+        log for log in audit_logs if log.reason_code == "cloud_operation_failed"
+    )
+
+    assert failure_log.provider == "aws"
+    assert failure_log.action == "delete"
+    assert failure_log.event_type == "operation_failure"
+
 
 # ============================================================
 # AWS LIVE INVENTORY TESTS
