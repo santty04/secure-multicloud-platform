@@ -16,21 +16,33 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     jwt_algorithm: str = "HS256"
 
-    # Azure
+    # ============================================================
+    # AZURE
+    # ============================================================
+
     azure_subscription_id: str | None = None
     azure_write_enabled: bool = False
+
     azure_viewer_client_id: str | None = None
     azure_operator_client_id: str | None = None
     azure_administrator_client_id: str | None = None
 
+    # ============================================================
     # AWS
+    # ============================================================
+
     aws_region: str = "us-east-2"
     aws_write_enabled: bool = False
 
+    # Backend execution role used as the first STS hop.
+    aws_backend_execution_role_arn: str | None = None
+
+    # Application RBAC -> AWS IAM role mapping.
     aws_viewer_role_arn: str | None = None
     aws_operator_role_arn: str | None = None
     aws_administrator_role_arn: str | None = None
 
+    # Controlled EC2 CREATE configuration.
     aws_ami_id: str | None = None
     aws_subnet_id: str | None = None
     aws_security_group_id: str | None = None
