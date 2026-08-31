@@ -26,9 +26,16 @@ class Settings(BaseSettings):
     # AWS
     aws_region: str = "us-east-2"
     aws_write_enabled: bool = False
+
     aws_viewer_role_arn: str | None = None
     aws_operator_role_arn: str | None = None
     aws_administrator_role_arn: str | None = None
+
+    aws_ami_id: str | None = None
+    aws_subnet_id: str | None = None
+    aws_security_group_id: str | None = None
+    aws_instance_type: str = "t3.micro"
+    aws_root_volume_size_gb: int = 8
 
     model_config = SettingsConfigDict(
         env_file=".env",

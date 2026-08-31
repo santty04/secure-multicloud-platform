@@ -3,6 +3,7 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.cloud.aws.errors import AWSCloudError
@@ -1639,6 +1640,322 @@ def test_aws_delete_failure_is_recorded(
     assert failure_log.provider == "aws"
     assert failure_log.action == "delete"
     assert failure_log.event_type == "operation_failure"
+
+
+# ============================================================
+# AWS CREATE TESTS
+# ============================================================
+
+
+def test_operator_cannot_create_aws_instance(
+    client: TestClient,
+    operator: User,
+):
+    response = client.post(
+        "/api/v1/instances/aws",
+        json={
+            "name": "smp-test-create",
+        },
+        headers=authorization_header(operator),
+    )
+
+    assert_error_response(
+        response,
+        expected_status=403,
+        expected_message="Insufficient permissions.",
+    )
+
+
+def test_aws_create_is_disabled_by_default(
+    client: TestClient,
+    administrator: User,
+    monkeypatch,
+):
+    called = False
+
+    def fake_create_aws_instance(
+        *,
+        name: str,
+        role_code: str,
+        client_token: str,
+    ) -> str:
+        nonlocal called
+
+        del name, role_code, client_token
+        called = True
+
+        return "i-test-create-disabled"
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.create_aws_instance",
+        fake_create_aws_instance,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.aws_write_enabled",
+        False,
+    )
+
+    response = client.post(
+        "/api/v1/instances/aws",
+        json={
+            "name": "smp-test-disabled",
+        },
+        headers=authorization_header(administrator),
+    )
+
+    assert_error_response(
+        response,
+        expected_status=503,
+        expected_message="AWS write operations are disabled.",
+    )
+
+    assert called is False
+
+
+def test_administrator_can_create_aws_instance(
+    client: TestClient,
+    administrator: User,
+    db_session: Session,
+    monkeypatch,
+):
+    called_name = None
+    called_role = None
+    called_token = None
+
+    def fake_create_aws_instance(
+        *,
+        name: str,
+        role_code: str,
+        client_token: str,
+    ) -> str:
+        nonlocal called_name
+        nonlocal called_role
+        nonlocal called_token
+
+        called_name = name
+        called_role = role_code
+        called_token = client_token
+
+        return "i-test000000000040"
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.create_aws_instance",
+        fake_create_aws_instance,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.aws_write_enabled",
+        True,
+    )
+
+    response = client.post(
+        "/api/v1/instances/aws",
+        json={
+            "name": "smp-test-create",
+        },
+        headers=authorization_header(administrator),
+    )
+
+    assert response.status_code == 201
+
+    body = response.json()
+
+    assert body["cloud_resource_id"] == "i-test000000000040"
+    assert body["provider"] == "aws"
+    assert body["name"] == "smp-test-create"
+    assert body["status"] == "pending"
+    assert body["requested_by"] == str(administrator.id)
+
+    resource = db_session.scalar(
+        select(ManagedResource).where(
+            ManagedResource.cloud_resource_id == "i-test000000000040"
+        )
+    )
+
+    assert resource is not None
+    assert resource.provider == "aws"
+    assert resource.environment == "dev"
+    assert resource.is_managed is True
+    assert resource.registered_by_id == administrator.id
+
+    assert called_name == "smp-test-create"
+    assert called_role == "administrator"
+
+    assert called_token is not None
+    uuid.UUID(called_token)
+
+
+def test_aws_create_cloud_failure_is_recorded(
+    client: TestClient,
+    administrator: User,
+    db_session: Session,
+    monkeypatch,
+):
+    def fake_create_aws_instance(
+        *,
+        name: str,
+        role_code: str,
+        client_token: str,
+    ) -> str:
+        del name, role_code, client_token
+
+        raise AWSCloudError(
+            code="aws_access_denied",
+            message="AWS denied the requested operation.",
+        )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.create_aws_instance",
+        fake_create_aws_instance,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.aws_write_enabled",
+        True,
+    )
+
+    response = client.post(
+        "/api/v1/instances/aws",
+        json={
+            "name": "smp-test-create-failure",
+        },
+        headers=authorization_header(administrator),
+    )
+
+    assert_error_response(
+        response,
+        expected_status=502,
+        expected_message="AWS EC2 instance create operation failed.",
+    )
+
+    correlation_id = uuid.UUID(
+        response.headers["X-Correlation-ID"],
+    )
+
+    operation = db_session.scalar(
+        select(Operation).where(
+            Operation.correlation_id == correlation_id,
+        )
+    )
+
+    assert operation is not None
+    assert operation.action == "create"
+    assert operation.provider == "aws"
+    assert operation.status == "failed"
+    assert operation.resource_id is None
+    assert operation.error_code == "aws_access_denied"
+    assert operation.error_message == ("AWS denied the requested operation.")
+
+
+def test_aws_create_rejects_invalid_name(
+    client: TestClient,
+    administrator: User,
+):
+    response = client.post(
+        "/api/v1/instances/aws",
+        json={
+            "name": "invalid name with spaces!",
+        },
+        headers=authorization_header(administrator),
+    )
+
+    assert response.status_code == 422
+
+
+def test_aws_create_requests_cleanup_when_registration_fails(
+    client: TestClient,
+    administrator: User,
+    db_session: Session,
+    monkeypatch,
+):
+    instance_id = "i-test000000000041"
+
+    def fake_create_aws_instance(
+        *,
+        name: str,
+        role_code: str,
+        client_token: str,
+    ) -> str:
+        del name, role_code, client_token
+
+        return instance_id
+
+    def fake_register_aws_managed_resource(
+        *,
+        db,
+        cloud_resource_id: str,
+        name: str,
+        current_user: User,
+    ):
+        del db, cloud_resource_id, name, current_user
+
+        raise SQLAlchemyError("Simulated database registration failure")
+
+    cleanup_instance_id = None
+    cleanup_role = None
+
+    def fake_terminate_aws_instance(
+        instance_id: str,
+        role_code: str,
+    ) -> None:
+        nonlocal cleanup_instance_id
+        nonlocal cleanup_role
+
+        cleanup_instance_id = instance_id
+        cleanup_role = role_code
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.create_aws_instance",
+        fake_create_aws_instance,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.register_aws_managed_resource",
+        fake_register_aws_managed_resource,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.terminate_aws_instance",
+        fake_terminate_aws_instance,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.aws_write_enabled",
+        True,
+    )
+
+    response = client.post(
+        "/api/v1/instances/aws",
+        json={
+            "name": "smp-test-cleanup",
+        },
+        headers=authorization_header(administrator),
+    )
+
+    assert_error_response(
+        response,
+        expected_status=500,
+        expected_message="AWS EC2 instance registration failed.",
+    )
+
+    assert cleanup_instance_id == instance_id
+    assert cleanup_role == "administrator"
+
+    correlation_id = uuid.UUID(
+        response.headers["X-Correlation-ID"],
+    )
+
+    operation = db_session.scalar(
+        select(Operation).where(
+            Operation.correlation_id == correlation_id,
+        )
+    )
+
+    assert operation is not None
+    assert operation.status == "failed"
+    assert operation.action == "create"
+    assert operation.error_code == "aws_registration_failed"
 
 
 # ============================================================

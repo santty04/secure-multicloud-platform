@@ -3,10 +3,14 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.dependencies import (
     DatabaseSession,
     require_permission,
+)
+from app.cloud.aws.ec2 import (
+    create_instance as create_aws_instance,
 )
 from app.cloud.aws.ec2 import (
     get_instance_state as get_aws_instance_state,
@@ -32,6 +36,8 @@ from app.cloud.azure.compute import (
 from app.core.config import settings
 from app.db.models import ManagedResource, User
 from app.schemas.managed_instance import (
+    AWSInstanceCreateRequest,
+    AWSInstanceCreateResponse,
     AWSInstanceSummary,
     CloudProvider,
     InstanceActionResponse,
@@ -54,6 +60,11 @@ router = APIRouter(
 # ============================================================
 # RBAC DEPENDENCIES
 # ============================================================
+
+CanCreateInstances = Annotated[
+    User,
+    Depends(require_permission("vm.create")),
+]
 
 CanReadInstances = Annotated[
     User,
@@ -99,6 +110,31 @@ def get_managed_resource(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Resource not found.",
         )
+
+    return resource
+
+
+def register_aws_managed_resource(
+    *,
+    db: DatabaseSession,
+    cloud_resource_id: str,
+    name: str,
+    current_user: User,
+) -> ManagedResource:
+    resource = ManagedResource(
+        provider=CloudProvider.AWS.value,
+        cloud_resource_id=cloud_resource_id,
+        name=name,
+        resource_type="virtual_machine",
+        region=settings.aws_region,
+        environment="dev",
+        status="pending",
+        is_managed=True,
+        registered_by_id=current_user.id,
+    )
+
+    db.add(resource)
+    db.flush()
 
     return resource
 
@@ -168,6 +204,266 @@ def execute_simulated_action(
         provider=provider,
         action=action,
         status="simulated",
+        requested_by=current_user.id,
+    )
+
+
+# ============================================================
+# AWS CREATE
+# ============================================================
+
+
+def execute_aws_create_action(
+    *,
+    request: Request,
+    db: DatabaseSession,
+    payload: AWSInstanceCreateRequest,
+    current_user: User,
+) -> AWSInstanceCreateResponse:
+    correlation_id = uuid.UUID(
+        request.state.correlation_id,
+    )
+
+    operation = create_operation(
+        db,
+        correlation_id=correlation_id,
+        user_id=current_user.id,
+        resource_id=None,
+        provider=CloudProvider.AWS.value,
+        action="create",
+        required_permission="vm.create",
+    )
+
+    create_audit_log(
+        db,
+        correlation_id=correlation_id,
+        operation_id=operation.id,
+        user_id=current_user.id,
+        resource_id=None,
+        provider=CloudProvider.AWS.value,
+        action="create",
+        decision="allowed",
+        reason_code="permission_granted",
+        required_permission="vm.create",
+        role_code=current_user.role.code,
+        event_type="operation",
+        http_method=request.method,
+        request_path=request.url.path,
+        details={
+            "execution_mode": "aws",
+            "resource_name": payload.name,
+        },
+    )
+
+    # CREATE is not simulated because that would require inventing
+    # a ManagedResource / EC2 identifier that does not actually exist.
+    if not settings.aws_write_enabled:
+        mark_operation_failed(
+            db,
+            operation=operation,
+            error_code="aws_write_disabled",
+            error_message="AWS write operations are disabled.",
+            result_summary={
+                "execution_mode": "disabled",
+                "resource_name": payload.name,
+            },
+        )
+
+        db.commit()
+
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AWS write operations are disabled.",
+        )
+
+    # Persist the operation before contacting AWS.
+    # If the process fails after RunInstances, the attempted CREATE
+    # remains traceable through the correlation ID.
+    db.commit()
+
+    try:
+        instance_id = create_aws_instance(
+            name=payload.name,
+            role_code=current_user.role.code,
+            client_token=str(correlation_id),
+        )
+
+    except AWSCloudError as exc:
+        mark_operation_failed(
+            db,
+            operation=operation,
+            error_code=exc.code,
+            error_message=exc.message,
+            result_summary={
+                "execution_mode": "aws",
+                "resource_name": payload.name,
+            },
+        )
+
+        create_audit_log(
+            db,
+            correlation_id=correlation_id,
+            operation_id=operation.id,
+            user_id=current_user.id,
+            resource_id=None,
+            provider=CloudProvider.AWS.value,
+            action="create",
+            decision="allowed",
+            reason_code="cloud_operation_failed",
+            required_permission="vm.create",
+            role_code=current_user.role.code,
+            event_type="operation_failure",
+            http_method=request.method,
+            request_path=request.url.path,
+            details={
+                "execution_mode": "aws",
+                "error_type": type(exc).__name__,
+                "error_code": exc.code,
+            },
+        )
+
+        db.commit()
+
+        if exc.code == "aws_configuration_error":
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="AWS EC2 instance creation is unavailable.",
+            ) from exc
+
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="AWS EC2 instance create operation failed.",
+        ) from exc
+
+    try:
+        resource = register_aws_managed_resource(
+            db=db,
+            cloud_resource_id=instance_id,
+            name=payload.name,
+            current_user=current_user,
+        )
+
+        operation.resource_id = resource.id
+
+        mark_operation_success(
+            db,
+            operation=operation,
+            result_summary={
+                "execution_mode": "aws",
+                "resource_name": payload.name,
+                "cloud_resource_id": instance_id,
+            },
+        )
+
+        create_audit_log(
+            db,
+            correlation_id=correlation_id,
+            operation_id=operation.id,
+            user_id=current_user.id,
+            resource_id=resource.id,
+            provider=CloudProvider.AWS.value,
+            action="create",
+            decision="allowed",
+            reason_code="cloud_operation_succeeded",
+            required_permission="vm.create",
+            role_code=current_user.role.code,
+            event_type="operation_success",
+            http_method=request.method,
+            request_path=request.url.path,
+            details={
+                "execution_mode": "aws",
+                "cloud_resource_id": instance_id,
+            },
+        )
+
+        db.commit()
+
+    except SQLAlchemyError as exc:
+        # AWS has already created the EC2 instance.
+        # Roll back the failed local registration first.
+        db.rollback()
+
+        cleanup_requested = False
+
+        try:
+            terminate_aws_instance(
+                instance_id,
+                current_user.role.code,
+            )
+            cleanup_requested = True
+
+        except AWSCloudError:
+            cleanup_requested = False
+
+        if cleanup_requested:
+            error_code = "aws_registration_failed"
+            error_message = (
+                "AWS instance registration failed and cloud cleanup was requested."
+            )
+            cleanup_status = "termination_requested"
+
+        else:
+            error_code = "aws_registration_cleanup_failed"
+            error_message = (
+                "AWS instance registration failed and automatic cloud cleanup failed."
+            )
+            cleanup_status = "cleanup_failed"
+
+        mark_operation_failed(
+            db,
+            operation=operation,
+            error_code=error_code,
+            error_message=error_message,
+            result_summary={
+                "execution_mode": "aws",
+                "resource_name": payload.name,
+                "cleanup_status": cleanup_status,
+            },
+        )
+
+        failure_details: dict[str, str] = {
+            "execution_mode": "aws",
+            "error_type": "database_registration_error",
+            "cleanup_status": cleanup_status,
+        }
+
+        if not cleanup_requested:
+            # EC2 instance IDs are identifiers rather than credentials.
+            # Keeping the ID allows an administrator to locate and
+            # manually clean up a potential orphaned instance.
+            failure_details["orphaned_cloud_resource_id"] = instance_id
+
+        create_audit_log(
+            db,
+            correlation_id=correlation_id,
+            operation_id=operation.id,
+            user_id=current_user.id,
+            resource_id=None,
+            provider=CloudProvider.AWS.value,
+            action="create",
+            decision="allowed",
+            reason_code="resource_registration_failed",
+            required_permission="vm.create",
+            role_code=current_user.role.code,
+            event_type="operation_failure",
+            http_method=request.method,
+            request_path=request.url.path,
+            details=failure_details,
+        )
+
+        db.commit()
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="AWS EC2 instance registration failed.",
+        ) from exc
+
+    return AWSInstanceCreateResponse(
+        resource_id=resource.id,
+        cloud_resource_id=instance_id,
+        provider=CloudProvider.AWS,
+        name=resource.name,
+        status=resource.status,
         requested_by=current_user.id,
     )
 
@@ -764,6 +1060,30 @@ def list_instances(
 
 
 # ============================================================
+# CREATE AWS INSTANCE
+# ============================================================
+
+
+@router.post(
+    "/aws",
+    response_model=AWSInstanceCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_aws_managed_instance(
+    request: Request,
+    payload: AWSInstanceCreateRequest,
+    current_user: CanCreateInstances,
+    db: DatabaseSession,
+) -> AWSInstanceCreateResponse:
+    return execute_aws_create_action(
+        request=request,
+        db=db,
+        payload=payload,
+        current_user=current_user,
+    )
+
+
+# ============================================================
 # AWS LIVE INVENTORY
 # ============================================================
 
@@ -783,7 +1103,6 @@ def list_live_aws_instances(
     The application permission vm.read is checked before reaching AWS.
     The backend then assumes the corresponding AWS IAM role through STS.
     """
-
     try:
         return list_aws_instances(
             current_user.role.code,
@@ -840,7 +1159,7 @@ def get_instance_status(
         if real_status is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="AWS EC2 instance not found or not managed by the platform.",
+                detail=("AWS EC2 instance not found or not managed by the platform."),
             )
 
     return InstanceStatusResponse(

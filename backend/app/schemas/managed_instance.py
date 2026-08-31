@@ -1,7 +1,7 @@
 import uuid
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CloudProvider(StrEnum):
@@ -45,3 +45,20 @@ class AWSInstanceSummary(BaseModel):
     private_ip: str | None
     provider: str
     region: str
+
+
+class AWSInstanceCreateRequest(BaseModel):
+    name: str = Field(
+        min_length=1,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9._-]+$",
+    )
+
+
+class AWSInstanceCreateResponse(BaseModel):
+    resource_id: uuid.UUID
+    cloud_resource_id: str
+    provider: CloudProvider
+    name: str
+    status: str
+    requested_by: uuid.UUID
