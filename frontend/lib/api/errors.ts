@@ -4,7 +4,7 @@ export type ApiError = {
   code: string;
   message: string;
   correlationId?: string;
-  status?: number;
+  status: number;
   /** true for 5xx, network failures, 408, 429 — worth offering a retry button for. */
   retryable: boolean;
 };
@@ -60,7 +60,17 @@ export function networkError(): ApiError {
     code: "network_error",
     message:
       "No se pudo contactar al backend. No se muestran datos en caché para evitar decisiones sobre información desactualizada.",
+    status: 0,
     retryable: true,
+  };
+}
+
+export function unexpectedResponseError(): ApiError {
+  return {
+    code: "unexpected_response",
+    message: "El backend respondió con un formato inesperado.",
+    status: 0,
+    retryable: false,
   };
 }
 

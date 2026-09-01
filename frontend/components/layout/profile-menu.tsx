@@ -28,7 +28,7 @@ export function ProfileMenu() {
 
   const handleLogout = () => {
     logout();
-    router.push("/login");
+    router.replace("/login");
   };
 
   if (!user) return null;
