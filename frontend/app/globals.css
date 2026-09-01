@@ -1,0 +1,187 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Secure Multicloud Platform is a single fixed dark theme (operator console,
+ * no light mode in the design). We override the shadcn base tokens with the
+ * product palette instead of maintaining a `.dark` variant.
+ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* Secure Multicloud Platform product tokens (see HANDOFF.md §2). */
+@theme {
+  --color-smp-bg: #070d1a;
+  --color-smp-surface: #101a2e;
+  --color-smp-surface-alt: #0c1526;
+  --color-smp-surface-raised: #0a1224;
+  --color-smp-input: #0d1626;
+  --color-smp-line: #1e2b45;
+  --color-smp-line-soft: #16233c;
+  --color-smp-line-2: #24334f;
+  --color-smp-ink: #e8eefb;
+  --color-smp-ink-muted: #9aa9c4;
+  --color-smp-ink-dim: #7d8fac;
+  --color-smp-ink-faint: #6b7c9b;
+  --color-smp-disabled: #3f4d68;
+  --color-smp-disabled-line: #182440;
+  --color-smp-accent: #2f7ff6;
+  --color-smp-accent-hover: #4a91ff;
+  --color-smp-accent-soft: #5aa2ff;
+  --color-smp-accent-soft-hover: #8dc0ff;
+  --color-smp-success: #3ec78d;
+  --color-smp-warning: #e8a23a;
+  --color-smp-warning-ink: #e2bb7c;
+  --color-smp-danger: #d65a3a;
+  --color-smp-danger-strong: #c04a30;
+  --color-smp-danger-hover: #d4573a;
+  --color-smp-danger-text: #f08a6f;
+  --color-smp-danger-text-soft: #f3a892;
+  --color-smp-azure: #5aa2ff;
+  --color-smp-aws: #e8a23a;
+}
+
+:root {
+  --background: #070d1a;
+  --foreground: #e8eefb;
+  --card: #101a2e;
+  --card-foreground: #e8eefb;
+  --popover: #101a2e;
+  --popover-foreground: #e8eefb;
+  --primary: #2f7ff6;
+  --primary-foreground: #ffffff;
+  --secondary: #16233c;
+  --secondary-foreground: #e8eefb;
+  --muted: #101a2e;
+  --muted-foreground: #9aa9c4;
+  --accent: #16233c;
+  --accent-foreground: #e8eefb;
+  --destructive: #d65a3a;
+  --border: #1e2b45;
+  --input: #0d1626;
+  --ring: #5aa2ff;
+  --chart-1: #5aa2ff;
+  --chart-2: #3ec78d;
+  --chart-3: #e8a23a;
+  --chart-4: #d65a3a;
+  --chart-5: #9aa9c4;
+  --radius: 0.625rem;
+  --sidebar: #0a1224;
+  --sidebar-foreground: #e8eefb;
+  --sidebar-primary: #2f7ff6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #16233c;
+  --sidebar-accent-foreground: #e8eefb;
+  --sidebar-border: #16233c;
+  --sidebar-ring: #5aa2ff;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+    color-scheme: dark;
+  }
+  ::placeholder {
+    color: var(--color-smp-ink-faint);
+  }
+  select option {
+    background: var(--color-smp-surface-alt);
+    color: var(--color-smp-ink);
+  }
+}
+
+@keyframes smp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes smp-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+@keyframes smp-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes smp-drawer {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes smp-shimmer {
+  0% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0.35;
+  }
+}
