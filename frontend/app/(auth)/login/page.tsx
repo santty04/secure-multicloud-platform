@@ -1,43 +1,59 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Eye, EyeOff, ShieldCheck } from "lucide-react";
-import { useLogin } from "@/features/auth/use-login";
+import { useCurrentUser, useHasAccessToken, useLogin } from "@/features/auth/hooks";
+import { loginRequestSchema, type LoginRequest } from "@/schemas/auth";
+import { isApiError } from "@/lib/api/errors";
 
 const MOCKS_ENABLED = process.env.NEXT_PUBLIC_ENABLE_MOCKS === "true";
 
-const DEMO_ACCOUNTS = [
-  { email: "ana.torres@smp.edu", initials: "AT", roleLabel: "Viewer · 2 permisos" },
-  { email: "l.mendez@smp.edu", initials: "LM", roleLabel: "Operador · 4 permisos" },
-  { email: "c.rivas@smp.edu", initials: "CR", roleLabel: "Administrador · 8 permisos" },
-] as const;
-
-const DEMO_PASSWORD = "demo1234";
-
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const hasToken = useHasAccessToken();
   const login = useLogin();
+  const currentUser = useCurrentUser({ enabled: hasToken });
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  const form = useForm<LoginRequest>({
+    resolver: zodResolver(loginRequestSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  });
+
+  useEffect(() => {
+    if (currentUser.data) router.replace("/dashboard");
+  }, [currentUser.data, router]);
+
+  function handleSubmit(values: LoginRequest) {
     login.mutate(
-      { email, password },
+      values,
       {
         onSuccess: () => {
-          router.push("/dashboard");
+          router.replace("/dashboard");
         },
       },
     );
   }
 
-  function pickDemoAccount(accountEmail: string) {
-    setEmail(accountEmail);
-    setPassword(DEMO_PASSWORD);
+  function loginErrorMessage(): string | null {
+    if (!login.error) return null;
+    if (!isApiError(login.error)) return "El backend respondió con un formato inesperado.";
+    if (login.error.code === "network_error") {
+      return "No se pudo contactar al backend. Verifica que FastAPI esté disponible.";
+    }
+    if (login.error.status === 401) return "Correo o contraseña incorrectos.";
+    if (login.error.status === 422) return "Revisa el correo y la contraseña ingresados.";
+    return login.error.message || "No se pudo completar el inicio de sesión.";
   }
+
+  const errorMessage = loginErrorMessage();
+  const isSubmitting = login.isPending;
 
   return (
     <div className="grid min-h-screen grid-cols-1 bg-smp-bg lg:grid-cols-[1.05fr_.95fr]">
@@ -117,7 +133,7 @@ export default function LoginPage() {
             Acceso restringido. No existe registro público de usuarios.
           </p>
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="flex flex-col gap-4" noValidate>
             <div className="flex flex-col gap-[7px]">
               <label htmlFor="smp-email" className="text-[12px] font-semibold text-[#c3d0e6]">
                 Correo electrónico
@@ -126,12 +142,17 @@ export default function LoginPage() {
                 id="smp-email"
                 type="email"
                 autoComplete="username"
-                required
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                aria-invalid={Boolean(form.formState.errors.email)}
+                aria-describedby={form.formState.errors.email ? "smp-email-error" : undefined}
+                {...form.register("email")}
                 placeholder="operator@smp.edu"
                 className="rounded-[10px] border border-smp-line-2 bg-smp-input px-[13px] py-[11px] text-[14px] text-smp-ink outline-none focus-visible:border-smp-accent-soft"
               />
+              {form.formState.errors.email ? (
+                <div id="smp-email-error" className="text-[11.5px] text-smp-danger-text">
+                  Ingresa un correo electrónico válido.
+                </div>
+              ) : null}
             </div>
 
             <div className="flex flex-col gap-[7px]">
@@ -143,9 +164,9 @@ export default function LoginPage() {
                   id="smp-pass"
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
-                  required
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
+                  aria-invalid={Boolean(form.formState.errors.password)}
+                  aria-describedby={form.formState.errors.password ? "smp-password-error" : undefined}
+                  {...form.register("password")}
                   placeholder="••••••••••"
                   className="flex-1 rounded-[10px] border border-smp-line-2 bg-smp-input py-[11px] pl-[13px] pr-[44px] text-[14px] text-smp-ink outline-none focus-visible:border-smp-accent-soft"
                 />
@@ -163,9 +184,14 @@ export default function LoginPage() {
                   )}
                 </button>
               </div>
+              {form.formState.errors.password ? (
+                <div id="smp-password-error" className="text-[11.5px] text-smp-danger-text">
+                  Ingresa tu contraseña.
+                </div>
+              ) : null}
             </div>
 
-            {login.error ? (
+            {errorMessage ? (
               <div
                 role="alert"
                 className="flex gap-2.5 rounded-[10px] border border-smp-danger/40 bg-smp-danger/10 p-[12px_13px] animate-[smp-in_.18s_ease-out]"
@@ -180,54 +206,22 @@ export default function LoginPage() {
                   <div className="text-[13px] font-semibold text-smp-danger-text-soft">
                     No se pudo iniciar sesión
                   </div>
-                  <div className="text-[12.5px] text-[#c9b0a6]">{login.error.message}</div>
-                  {login.error.correlationId ? (
-                    <div className="mt-[5px] font-mono text-[11px] text-smp-ink-muted">
-                      correlation_id: {login.error.correlationId}
-                    </div>
-                  ) : null}
+                  <div className="text-[12.5px] text-[#c9b0a6]">{errorMessage}</div>
                 </div>
               </div>
             ) : null}
 
             <button
               type="submit"
-              disabled={login.isPending}
+              disabled={isSubmitting}
               className="mt-1 flex items-center justify-center gap-[9px] rounded-[10px] border-0 bg-smp-accent px-4 py-3 text-[14px] font-semibold text-white hover:bg-smp-accent-hover active:scale-[.99] disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {login.isPending ? (
+              {isSubmitting ? (
                 <span className="size-[15px] animate-[smp-spin_.7s_linear_infinite] rounded-full border-2 border-white/35 border-t-white" />
               ) : null}
-              {login.isPending ? "Verificando credenciales…" : "Iniciar sesión"}
+              {isSubmitting ? "Verificando credenciales…" : "Iniciar sesión"}
             </button>
           </form>
-
-          {MOCKS_ENABLED ? (
-            <div className="mt-[26px] border-t border-smp-line-soft pt-5">
-              <div className="mb-2.5 text-[11px] font-semibold uppercase tracking-[.08em] text-smp-ink-faint">
-                Cuentas de demostración
-              </div>
-              <div className="grid gap-2">
-                {DEMO_ACCOUNTS.map((account) => (
-                  <button
-                    key={account.email}
-                    type="button"
-                    onClick={() => pickDemoAccount(account.email)}
-                    className="flex items-center gap-3 rounded-[10px] border border-smp-line bg-smp-input px-3 py-[9px] text-left text-smp-ink hover:border-smp-accent hover:bg-[#101c33]"
-                  >
-                    <span className="grid size-[26px] shrink-0 place-items-center rounded-[7px] bg-smp-line-soft text-[11px] font-bold text-smp-ink-muted">
-                      {account.initials}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[12.5px] font-semibold">{account.email}</span>
-                      <span className="block text-[11px] text-smp-ink-dim">{account.roleLabel}</span>
-                    </span>
-                    <span className="font-mono text-[10.5px] text-smp-ink-faint">usar</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
         </div>
       </div>
     </div>

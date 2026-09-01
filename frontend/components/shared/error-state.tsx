@@ -24,11 +24,6 @@ export function ErrorState({
       </div>
       <h2 className="mb-2 text-[19px] font-semibold text-smp-ink">No hay conexión con el backend</h2>
       <p className="mb-1.5 text-balance text-[13.5px] text-smp-ink-muted">{error.message}</p>
-      {error.correlationId ? (
-        <div className="mb-5 font-mono text-[11.5px] text-smp-ink-faint">
-          correlation_id: {error.correlationId}
-        </div>
-      ) : null}
       <Button onClick={onRetry} className="bg-smp-accent hover:bg-smp-accent-hover">
         Reintentar
       </Button>

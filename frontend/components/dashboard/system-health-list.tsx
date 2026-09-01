@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils";
 import { useHealth } from "@/features/health/use-health";
 import { decodeJwtExpiry } from "@/lib/auth/decode-jwt";
-import { tokenStore } from "@/lib/auth/token-store";
+import { getAccessToken } from "@/lib/auth/session";
 
 interface HealthRow {
   label: string;
@@ -32,7 +32,7 @@ export function SystemHealthList() {
     },
   ];
 
-  const token = tokenStore.get();
+  const token = getAccessToken();
   const expiry = token ? decodeJwtExpiry(token) : null;
   if (expiry) {
     // Display only (see decode-jwt.ts) — a per-render Date.now() read is
