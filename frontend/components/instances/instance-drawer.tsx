@@ -1,7 +1,7 @@
 import { DetailDrawer } from "@/components/shared/detail-drawer";
 import { providerFullName } from "@/components/shared/provider-badge";
-import { can } from "@/features/auth/can";
-import { instanceStatusFilterValue, instanceStatusPresentation } from "@/lib/utils/status";
+import { useInstanceStatus } from "@/features/instances/use-instances";
+import { instanceStatusPresentation } from "@/lib/utils/status";
 import type { Instance } from "@/types/domain";
 
 function wideButtonClass(kind: "neutral" | "danger", disabled: boolean) {
@@ -20,60 +20,37 @@ function wideButtonClass(kind: "neutral" | "danger", disabled: boolean) {
  * `CurrentUserResponse` exposes no cloud-identity string, and instances
  * (unlike operations/audit logs) don't carry a correlation id at all.
  *
- * The delete action only opens the confirm dialog (via `onDeleteRequest`,
- * same callback the row's inline delete button uses) — it never calls the
- * delete mutation directly, so the page can render one shared
- * `<DeleteInstanceDialog>` regardless of which trigger opened it.
+ * Opening this drawer is the only place that queries the real-time status
+ * endpoint, and it does so with the platform UUID from `Instance.id`.
  */
 export function InstanceDrawer({
   instance,
   open,
   onOpenChange,
-  permissions,
-  isStarting,
-  isStopping,
-  isDeleting,
-  onStart,
-  onStop,
-  onDeleteRequest,
 }: {
   instance: Instance | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  permissions: string[] | undefined;
-  isStarting: boolean;
-  isStopping: boolean;
-  isDeleting: boolean;
-  onStart: (instance: Instance) => void;
-  onStop: (instance: Instance) => void;
-  onDeleteRequest: (instance: Instance) => void;
 }) {
+  const statusQuery = useInstanceStatus({
+    provider: instance?.provider,
+    resourceId: instance?.id,
+    enabled: open && instance !== null,
+  });
+
   if (!instance) {
     return <DetailDrawer open={false} onOpenChange={onOpenChange} kindLabel="" title="" fields={[]} />;
   }
 
-  const { label } = instanceStatusPresentation(instance.status);
-  const bucket = instanceStatusFilterValue(instance.status);
-
-  const canStart = can(permissions, "vm.start");
-  const canStop = can(permissions, "vm.stop");
-  const canDelete = can(permissions, "vm.delete");
-
-  const startDisabled = !canStart || bucket === "running" || isStarting;
-  const stopDisabled = !canStop || bucket === "stopped" || isStopping;
-  const deleteDisabled = !canDelete || isDeleting;
-
-  const startTitle = !canStart
-    ? "Requiere permiso vm.start"
-    : bucket === "running"
-      ? "La instancia ya está en ejecución"
-      : "Iniciar instancia";
-  const stopTitle = !canStop
-    ? "Requiere permiso vm.stop"
-    : bucket === "stopped"
-      ? "La instancia ya está detenida"
-      : "Detener instancia";
-  const deleteTitle = canDelete ? "Eliminar instancia" : "Requiere permiso vm.delete";
+  const effectiveStatus = statusQuery.data?.status ?? instance.status;
+  const { label } = instanceStatusPresentation(effectiveStatus);
+  const statusDetail = statusQuery.isFetching
+    ? "Consultando estado real..."
+    : statusQuery.isError
+      ? "No se pudo consultar el estado real."
+      : statusQuery.data
+        ? "Estado real consultado desde el proveedor."
+        : "Estado registrado por la plataforma.";
 
   return (
     <DetailDrawer
@@ -82,50 +59,63 @@ export function InstanceDrawer({
       kindLabel={`Instancia · ${providerFullName(instance.provider)}`}
       title={instance.name}
       banner={
-        !canDelete
+        statusQuery.isError
           ? {
               tone: "warning",
-              title: "RBAC:",
-              text: "tu rol no incluye el permiso vm.delete. El backend rechazaría la solicitud con 403.",
+              title: "Estado:",
+              text: statusQuery.error.message,
             }
-          : undefined
+          : {
+              tone: "warning",
+              title: "Solo lectura:",
+              text: "crear, iniciar, detener y eliminar todavía no están integrados en esta vista.",
+            }
       }
       fields={[
         { label: "Estado", value: label },
+        { label: "Lectura de estado", value: statusDetail },
         { label: "Proveedor", value: providerFullName(instance.provider) },
         { label: "Región", value: instance.region, mono: true },
         { label: "Tipo de recurso", value: instance.resourceType, mono: true },
         { label: "Entorno", value: instance.environment },
+        { label: "UUID interno", value: instance.id, mono: true },
       ]}
       actions={
         <>
           <button
             type="button"
-            onClick={() => onStart(instance)}
-            disabled={startDisabled}
-            title={startTitle}
-            aria-label={startTitle}
-            className={wideButtonClass("neutral", startDisabled)}
+            onClick={() => statusQuery.refetch()}
+            disabled={statusQuery.isFetching}
+            title="Actualizar estado real"
+            aria-label="Actualizar estado real"
+            className={wideButtonClass("neutral", statusQuery.isFetching)}
+          >
+            Actualizar estado
+          </button>
+          <button
+            type="button"
+            disabled
+            title="Iniciar instancia no integrado"
+            aria-label="Iniciar instancia no integrado"
+            className={wideButtonClass("neutral", true)}
           >
             Iniciar
           </button>
           <button
             type="button"
-            onClick={() => onStop(instance)}
-            disabled={stopDisabled}
-            title={stopTitle}
-            aria-label={stopTitle}
-            className={wideButtonClass("neutral", stopDisabled)}
+            disabled
+            title="Detener instancia no integrado"
+            aria-label="Detener instancia no integrado"
+            className={wideButtonClass("neutral", true)}
           >
             Detener
           </button>
           <button
             type="button"
-            onClick={() => onDeleteRequest(instance)}
-            disabled={deleteDisabled}
-            title={deleteTitle}
-            aria-label={deleteTitle}
-            className={wideButtonClass("danger", deleteDisabled)}
+            disabled
+            title="Eliminar instancia no integrado"
+            aria-label="Eliminar instancia no integrado"
+            className={wideButtonClass("danger", true)}
           >
             Eliminar
           </button>

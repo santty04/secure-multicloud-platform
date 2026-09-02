@@ -10,10 +10,12 @@ const KNOWN_INSTANCE_STATUS: Record<string, { label: string; tone: StatusTone }>
   running: { label: "En ejecución", tone: "success" },
   stopped: { label: "Detenida", tone: "neutral" },
   stopping: { label: "Deteniendo", tone: "warning" },
+  "shutting-down": { label: "Apagando", tone: "warning" },
   starting: { label: "Iniciando", tone: "warning" },
   pending: { label: "En transición", tone: "warning" },
   terminated: { label: "Eliminada", tone: "danger" },
   deleting: { label: "Eliminando", tone: "danger" },
+  unknown: { label: "Desconocido", tone: "neutral" },
 };
 
 export function instanceStatusPresentation(status: string): { label: string; tone: StatusTone } {

@@ -6,6 +6,11 @@
  * (`app/schemas/*.py`) and double-checked against the route handlers.
  */
 export type { LoginRequest, TokenResponse, CurrentUserResponse } from "@/schemas/auth";
-export type { InstanceSummaryResponse, InstanceActionResponse } from "@/schemas/instance";
+export type {
+  InstanceSummaryResponse,
+  LiveAwsInstanceSummaryResponse,
+  InstanceStatusResponse,
+  InstanceActionResponse,
+} from "@/schemas/instance";
 export type { OperationResponse } from "@/schemas/operation";
 export type { AuditLogResponse } from "@/schemas/audit-log";
