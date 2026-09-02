@@ -116,3 +116,33 @@ output "container_registry_login_server" {
   description = "Login server del Azure Container Registry"
   value       = azurerm_container_registry.backend.login_server
 }
+
+output "postgresql_server_name" {
+  description = "Nombre del PostgreSQL Flexible Server"
+  value       = azurerm_postgresql_flexible_server.backend.name
+}
+
+output "postgresql_fqdn" {
+  description = "FQDN privado del PostgreSQL Flexible Server"
+  value       = azurerm_postgresql_flexible_server.backend.fqdn
+}
+
+output "postgresql_database_name" {
+  description = "Nombre de la base de datos del backend"
+  value       = azurerm_postgresql_flexible_server_database.backend.name
+}
+
+output "database_migration_identity_id" {
+  description = "Resource ID de la Managed Identity de migraciones"
+  value       = azurerm_user_assigned_identity.database_migration.id
+}
+
+output "database_migration_identity_client_id" {
+  description = "Client ID de la Managed Identity de migraciones"
+  value       = azurerm_user_assigned_identity.database_migration.client_id
+}
+
+output "database_migration_identity_principal_id" {
+  description = "Principal ID de la Managed Identity de migraciones"
+  value       = azurerm_user_assigned_identity.database_migration.principal_id
+}

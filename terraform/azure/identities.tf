@@ -49,3 +49,16 @@ resource "azurerm_user_assigned_identity" "backend" {
     purpose     = "backend-workload-identity"
   }
 }
+
+resource "azurerm_user_assigned_identity" "database_migration" {
+  name                = "id-smp-db-migration-${var.environment}"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+
+  tags = {
+    project     = var.project_name
+    environment = var.environment
+    managed_by  = "terraform"
+    purpose     = "database-migrations"
+  }
+}
