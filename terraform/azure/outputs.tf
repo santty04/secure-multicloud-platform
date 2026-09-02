@@ -146,3 +146,23 @@ output "database_migration_identity_principal_id" {
   description = "Principal ID de la Managed Identity de migraciones"
   value       = azurerm_user_assigned_identity.database_migration.principal_id
 }
+
+output "container_app_environment_id" {
+  description = "Resource ID del Azure Container Apps Environment"
+  value       = azurerm_container_app_environment.backend.id
+}
+
+output "container_app_environment_name" {
+  description = "Nombre del Azure Container Apps Environment"
+  value       = azurerm_container_app_environment.backend.name
+}
+
+output "container_app_environment_default_domain" {
+  description = "Dominio por defecto del Azure Container Apps Environment"
+  value       = azurerm_container_app_environment.backend.default_domain
+}
+
+output "container_app_environment_static_ip" {
+  description = "IP de infraestructura del Azure Container Apps Environment"
+  value       = azurerm_container_app_environment.backend.static_ip_address
+}
