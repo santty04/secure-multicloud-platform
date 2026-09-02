@@ -1,5 +1,10 @@
-import type { InstanceActionResponse, InstanceSummaryResponse } from "@/schemas/instance";
-import type { Instance, InstanceActionResult } from "@/types/domain";
+import type {
+  InstanceActionResponse,
+  InstanceStatusResponse,
+  InstanceSummaryResponse,
+  LiveAwsInstanceSummaryResponse,
+} from "@/schemas/instance";
+import type { Instance, InstanceActionResult, InstanceStatus, LiveAwsInstance } from "@/types/domain";
 
 export function toInstance(raw: InstanceSummaryResponse): Instance {
   return {
@@ -11,6 +16,27 @@ export function toInstance(raw: InstanceSummaryResponse): Instance {
     environment: raw.environment,
     status: raw.status,
     isManaged: raw.is_managed,
+  };
+}
+
+export function toLiveAwsInstance(raw: LiveAwsInstanceSummaryResponse): LiveAwsInstance {
+  return {
+    instanceId: raw.instance_id,
+    name: raw.name,
+    state: raw.state,
+    instanceType: raw.instance_type,
+    privateIp: raw.private_ip,
+    provider: raw.provider,
+    region: raw.region,
+  };
+}
+
+export function toInstanceStatus(raw: InstanceStatusResponse): InstanceStatus {
+  return {
+    resourceId: raw.resource_id,
+    provider: raw.provider,
+    name: raw.name,
+    status: raw.status,
   };
 }
 

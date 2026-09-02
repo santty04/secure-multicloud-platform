@@ -1,6 +1,6 @@
 import { http, HttpResponse } from "msw";
 import { loginRequestSchema, type TokenResponse } from "@/schemas/auth";
-import type { InstanceActionResponse } from "@/schemas/instance";
+import type { InstanceActionResponse, InstanceStatusResponse, LiveAwsInstanceSummaryResponse } from "@/schemas/instance";
 import type { OperationResponse } from "@/schemas/operation";
 import type { AuditLogResponse } from "@/schemas/audit-log";
 import type { CloudProvider } from "@/types/domain";
@@ -194,6 +194,62 @@ export const handlers = [
       return errorResponse(403, "http_error", "Insufficient permissions.");
     }
     return HttpResponse.json(getInstances());
+  }),
+
+  http.get("/api/v1/instances/aws/live", ({ request }) => {
+    const user = getAuthedUser(request);
+    if (!user) return unauthorized();
+    if (!user.permissions.includes("vm.read")) {
+      return errorResponse(403, "http_error", "Insufficient permissions.");
+    }
+    const liveAws: LiveAwsInstanceSummaryResponse[] = [
+      {
+        instance_id: "i-0b200000000000001",
+        name: "ec2-web-prod-01",
+        state: "running",
+        instance_type: "t3.micro",
+        private_ip: "10.0.1.14",
+        provider: "aws",
+        region: "us-east-1",
+      },
+      {
+        instance_id: "i-0b200000000000002",
+        name: "ec2-unregistered-01",
+        state: "stopped",
+        instance_type: "t3.small",
+        private_ip: null,
+        provider: "aws",
+        region: "us-east-1",
+      },
+    ];
+    return HttpResponse.json(liveAws);
+  }),
+
+  http.get("/api/v1/instances/:provider/:resourceId/status", ({ request, params }) => {
+    const user = getAuthedUser(request);
+    if (!user) return unauthorized();
+    if (!user.permissions.includes("vm.read")) {
+      return errorResponse(403, "http_error", "Insufficient permissions.");
+    }
+
+    const provider = String(params.provider);
+    const resourceId = String(params.resourceId);
+    if (!isCloudProvider(provider)) {
+      return errorResponse(422, "http_error", "La solicitud contiene datos inválidos.");
+    }
+
+    const instance = findInstance(provider, resourceId);
+    if (!instance || !instance.is_managed) {
+      return errorResponse(404, "http_error", "El recurso solicitado no existe o ya no está administrado por la plataforma.");
+    }
+
+    const response: InstanceStatusResponse = {
+      resource_id: instance.id,
+      provider: instance.provider,
+      name: instance.name,
+      status: instance.status,
+    };
+    return HttpResponse.json(response);
   }),
 
   http.post("/api/v1/instances/:provider/:resourceId/start", ({ request, params }) =>

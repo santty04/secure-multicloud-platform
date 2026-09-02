@@ -31,6 +31,23 @@ export interface Instance {
   isManaged: boolean;
 }
 
+export interface LiveAwsInstance {
+  instanceId: string;
+  name: string;
+  state: string;
+  instanceType: string;
+  privateIp: string | null;
+  provider: "aws";
+  region: string;
+}
+
+export interface InstanceStatus {
+  resourceId: string;
+  provider: CloudProvider;
+  name: string;
+  status: string;
+}
+
 export interface InstanceActionResult {
   resourceId: string;
   provider: CloudProvider;
