@@ -36,3 +36,16 @@ resource "azurerm_user_assigned_identity" "administrator" {
     purpose     = "rbac-administrator"
   }
 }
+
+resource "azurerm_user_assigned_identity" "backend" {
+  name                = "id-smp-backend-${var.environment}"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+
+  tags = {
+    project     = var.project_name
+    environment = var.environment
+    managed_by  = "terraform"
+    purpose     = "backend-workload-identity"
+  }
+}

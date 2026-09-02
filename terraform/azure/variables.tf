@@ -15,8 +15,3 @@ variable "location" {
   type        = string
   default     = "centralus"
 }
-
-variable "ssh_public_key_path" {
-  description = "Ruta local a la clave publica SSH usada por la VM de Azure"
-  type        = string
-}

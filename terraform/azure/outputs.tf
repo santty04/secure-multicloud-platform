@@ -82,3 +82,37 @@ output "rbac_scope" {
   description = "Scope utilizado para las asignaciones RBAC"
   value       = azurerm_resource_group.main.id
 }
+output "container_apps_subnet_id" {
+  description = "Subnet dedicada a Azure Container Apps"
+  value       = azurerm_subnet.container_apps.id
+}
+
+output "postgresql_subnet_id" {
+  description = "Subnet delegada a PostgreSQL Flexible Server"
+  value       = azurerm_subnet.postgresql.id
+}
+
+output "backend_identity_id" {
+  description = "Resource ID de la Managed Identity del backend"
+  value       = azurerm_user_assigned_identity.backend.id
+}
+
+output "backend_identity_client_id" {
+  description = "Client ID de la Managed Identity del backend"
+  value       = azurerm_user_assigned_identity.backend.client_id
+}
+
+output "backend_identity_principal_id" {
+  description = "Principal ID de la Managed Identity del backend"
+  value       = azurerm_user_assigned_identity.backend.principal_id
+}
+
+output "container_registry_name" {
+  description = "Nombre del Azure Container Registry"
+  value       = azurerm_container_registry.backend.name
+}
+
+output "container_registry_login_server" {
+  description = "Login server del Azure Container Registry"
+  value       = azurerm_container_registry.backend.login_server
+}
