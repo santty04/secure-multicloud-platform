@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,8 +10,10 @@ class Settings(BaseSettings):
     app_name: str = "Secure Multicloud Platform API"
     debug: bool = False
 
+    cors_allowed_origins: list[str] = Field(default_factory=list)
+
     database_url: str
-    test_database_url: str
+    test_database_url: str | None = None
 
     secret_key: str
     access_token_expire_minutes: int = 30
@@ -45,6 +48,24 @@ class Settings(BaseSettings):
     aws_instance_type: str = "t3.micro"
     aws_root_volume_size_gb: int = 8
 
-    # AWS federation from Azure
+    # ============================================================
+    # AWS FEDERATION FROM AZURE
+    # ============================================================
+
     aws_federation_audience: str | None = None
     azure_managed_identity_client_id: str | None = None
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        case_sensitive=False,
+    )
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+settings = get_settings()

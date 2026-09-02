@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_v1_router, root_router
 from app.core.config import get_settings
@@ -13,6 +14,15 @@ app = FastAPI(
     version=settings.app_version,
     debug=settings.debug,
 )
+
+if settings.cors_allowed_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_allowed_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 app.middleware("http")(add_correlation_id)
 
