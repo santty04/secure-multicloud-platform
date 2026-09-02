@@ -48,32 +48,3 @@ class Settings(BaseSettings):
     # AWS federation from Azure
     aws_federation_audience: str | None = None
     azure_managed_identity_client_id: str | None = None
-
-    # ============================================================
-    # AI
-    # ============================================================
-
-    ai_provider: str = "ollama"
-
-    ollama_base_url: str = "http://127.0.0.1:11434"
-    ollama_model: str = "qwen3:4b-instruct"
-    ollama_timeout_seconds: float = 120.0
-
-    ai_advisor_max_instances: int = 5
-    ai_advisor_min_disk_size_gb: int = 8
-    ai_advisor_max_disk_size_gb: int = 50
-
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-        case_sensitive=False,
-    )
-
-
-@lru_cache
-def get_settings() -> Settings:
-    return Settings()
-
-
-settings = get_settings()
