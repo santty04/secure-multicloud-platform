@@ -12,8 +12,23 @@ class Settings(BaseSettings):
 
     cors_allowed_origins: list[str] = Field(default_factory=list)
 
-    database_url: str
+    # ============================================================
+    # DATABASE
+    # ============================================================
+
+    # Local development / tests
+    database_url: str | None = None
     test_database_url: str | None = None
+
+    # Azure PostgreSQL
+    database_host: str | None = None
+    database_port: int = 5432
+    database_name: str = "secure_multicloud"
+    database_user: str = "id-smp-backend-dev"
+
+    # ============================================================
+    # AUTH
+    # ============================================================
 
     secret_key: str
     access_token_expire_minutes: int = 30
