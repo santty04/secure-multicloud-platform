@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     database_port: int = 5432
     database_name: str = "secure_multicloud"
     database_user: str = "id-smp-backend-dev"
+    database_application_user: str = "id-smp-backend-dev"
+    database_application_principal_id: str | None = None
 
     # ============================================================
     # AUTH
