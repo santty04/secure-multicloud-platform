@@ -16,7 +16,8 @@ variable "location" {
   default     = "centralus"
 }
 
-variable "ssh_public_key_path" {
-  description = "Ruta local a la clave publica SSH usada por la VM de Azure"
+variable "backend_secret_key" {
+  description = "JWT signing secret for the deployed backend"
   type        = string
+  sensitive   = true
 }
