@@ -5,13 +5,6 @@ type ApiFetchOptions = RequestInit & {
   auth?: boolean;
 };
 
-const apiOrigin = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
-
-function apiUrl(path: string) {
-  if (/^https?:\/\//.test(path)) return path;
-  return apiOrigin ? `${apiOrigin}${path}` : path;
-}
-
 export async function apiFetch<T>(path: string, init: ApiFetchOptions = {}): Promise<T> {
   const { auth = true, ...requestInit } = init;
   const token = auth ? getAccessToken() : null;
@@ -26,7 +19,7 @@ export async function apiFetch<T>(path: string, init: ApiFetchOptions = {}): Pro
 
   let response: Response;
   try {
-    response = await fetch(apiUrl(path), { ...requestInit, headers });
+    response = await fetch(path, { ...requestInit, headers });
   } catch {
     throw networkError();
   }
