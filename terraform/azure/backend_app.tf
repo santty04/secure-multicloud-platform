@@ -124,12 +124,57 @@ resource "azurerm_container_app" "backend" {
 
       env {
         name  = "AZURE_WRITE_ENABLED"
-        value = "false"
+        value = "true"
       }
 
       env {
         name  = "AWS_WRITE_ENABLED"
-        value = "false"
+        value = "true"
+      }
+
+      env {
+        name  = "AWS_REGION"
+        value = "us-east-2"
+      }
+
+      env {
+        name  = "AWS_FEDERATION_AUDIENCE"
+        value = "api://AzureADTokenExchange"
+      }
+
+      env {
+        name  = "AWS_BACKEND_EXECUTION_ROLE_ARN"
+        value = "arn:aws:iam::544709547055:role/SMPBackendExecutionRole"
+      }
+
+      env {
+        name  = "AWS_VIEWER_ROLE_ARN"
+        value = "arn:aws:iam::544709547055:role/SMPViewerRole"
+      }
+
+      env {
+        name  = "AWS_OPERATOR_ROLE_ARN"
+        value = "arn:aws:iam::544709547055:role/SMPOperatorRole"
+      }
+
+      env {
+        name  = "AWS_ADMINISTRATOR_ROLE_ARN"
+        value = "arn:aws:iam::544709547055:role/SMPAdministratorRole"
+      }
+
+      env {
+        name  = "AWS_AMI_ID"
+        value = "ami-02c98622c4c3f017d"
+      }
+
+      env {
+        name  = "AWS_SUBNET_ID"
+        value = "subnet-0ff0c9bdb8b1e5b56"
+      }
+
+      env {
+        name  = "AWS_SECURITY_GROUP_ID"
+        value = "sg-0ef437e4bbd47e90c"
       }
     }
   }

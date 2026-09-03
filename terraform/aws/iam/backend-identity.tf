@@ -19,6 +19,24 @@ resource "aws_iam_role" "smp_backend_execution" {
         }
 
         Action = "sts:AssumeRole"
+      },
+      {
+        Sid    = "AllowAzureBackendWorkloadIdentity"
+        Effect = "Allow"
+
+        Principal = {
+          Federated = aws_iam_openid_connect_provider.azure_backend.arn
+        }
+
+        Action = "sts:AssumeRoleWithWebIdentity"
+
+        Condition = {
+          StringEquals = {
+            "${local.azure_oidc_condition_prefix}:aud"  = local.azure_oidc_client_id
+            "${local.azure_oidc_condition_prefix}:oaud" = local.azure_token_audience
+            "${local.azure_oidc_condition_prefix}:sub"  = local.azure_backend_subject
+          }
+        }
       }
     ]
   })
