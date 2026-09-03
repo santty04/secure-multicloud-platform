@@ -15,3 +15,9 @@ variable "location" {
   type        = string
   default     = "centralus"
 }
+
+variable "backend_secret_key" {
+  description = "JWT signing secret for the deployed backend"
+  type        = string
+  sensitive   = true
+}
