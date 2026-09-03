@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     azure_viewer_client_id: str | None = None
     azure_operator_client_id: str | None = None
     azure_administrator_client_id: str | None = None
+    azure_resource_group: str | None = None
+    azure_managed_subnet_id: str | None = None
+    azure_default_vm_size: str = "Standard_B2pts_v2"
+    azure_default_location: str = "centralus"
 
     # ============================================================
     # AWS

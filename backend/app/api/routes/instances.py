@@ -29,6 +29,7 @@ from app.cloud.aws.ec2 import (
 )
 from app.cloud.aws.errors import AWSCloudError
 from app.cloud.azure.compute import (
+    create_virtual_machine,
     get_virtual_machine_power_state,
     start_virtual_machine,
     stop_virtual_machine,
@@ -39,6 +40,8 @@ from app.schemas.managed_instance import (
     AWSInstanceCreateRequest,
     AWSInstanceCreateResponse,
     AWSInstanceSummary,
+    AzureInstanceCreateRequest,
+    AzureInstanceCreateResponse,
     CloudProvider,
     InstanceActionResponse,
     InstanceStatusResponse,
@@ -127,6 +130,32 @@ def register_aws_managed_resource(
         name=name,
         resource_type="virtual_machine",
         region=settings.aws_region,
+        environment="dev",
+        status="pending",
+        is_managed=True,
+        registered_by_id=current_user.id,
+    )
+
+    db.add(resource)
+    db.flush()
+
+    return resource
+
+
+def register_azure_managed_resource(
+    *,
+    db: DatabaseSession,
+    cloud_resource_id: str,
+    name: str,
+    location: str,
+    current_user: User,
+) -> ManagedResource:
+    resource = ManagedResource(
+        provider=CloudProvider.AZURE.value,
+        cloud_resource_id=cloud_resource_id,
+        name=name,
+        resource_type="virtual_machine",
+        region=location,
         environment="dev",
         status="pending",
         is_managed=True,
@@ -255,8 +284,6 @@ def execute_aws_create_action(
         },
     )
 
-    # CREATE is not simulated because that would require inventing
-    # a ManagedResource / EC2 identifier that does not actually exist.
     if not settings.aws_write_enabled:
         mark_operation_failed(
             db,
@@ -276,9 +303,6 @@ def execute_aws_create_action(
             detail="AWS write operations are disabled.",
         )
 
-    # Persist the operation before contacting AWS.
-    # If the process fails after RunInstances, the attempted CREATE
-    # remains traceable through the correlation ID.
     db.commit()
 
     try:
@@ -379,8 +403,6 @@ def execute_aws_create_action(
         db.commit()
 
     except SQLAlchemyError as exc:
-        # AWS has already created the EC2 instance.
-        # Roll back the failed local registration first.
         db.rollback()
 
         cleanup_requested = False
@@ -398,14 +420,16 @@ def execute_aws_create_action(
         if cleanup_requested:
             error_code = "aws_registration_failed"
             error_message = (
-                "AWS instance registration failed and cloud cleanup was requested."
+                "AWS instance registration failed and "
+                "cloud cleanup was requested."
             )
             cleanup_status = "termination_requested"
 
         else:
             error_code = "aws_registration_cleanup_failed"
             error_message = (
-                "AWS instance registration failed and automatic cloud cleanup failed."
+                "AWS instance registration failed and "
+                "automatic cloud cleanup failed."
             )
             cleanup_status = "cleanup_failed"
 
@@ -428,10 +452,9 @@ def execute_aws_create_action(
         }
 
         if not cleanup_requested:
-            # EC2 instance IDs are identifiers rather than credentials.
-            # Keeping the ID allows an administrator to locate and
-            # manually clean up a potential orphaned instance.
-            failure_details["orphaned_cloud_resource_id"] = instance_id
+            failure_details["orphaned_cloud_resource_id"] = (
+                instance_id
+            )
 
         create_audit_log(
             db,
@@ -462,6 +485,236 @@ def execute_aws_create_action(
         resource_id=resource.id,
         cloud_resource_id=instance_id,
         provider=CloudProvider.AWS,
+        name=resource.name,
+        status=resource.status,
+        requested_by=current_user.id,
+    )
+
+
+# ============================================================
+# AZURE CREATE
+# ============================================================
+
+
+def execute_azure_create_action(
+    *,
+    request: Request,
+    db: DatabaseSession,
+    payload: AzureInstanceCreateRequest,
+    current_user: User,
+) -> AzureInstanceCreateResponse:
+    correlation_id = uuid.UUID(
+        request.state.correlation_id,
+    )
+
+    operation = create_operation(
+        db,
+        correlation_id=correlation_id,
+        user_id=current_user.id,
+        resource_id=None,
+        provider=CloudProvider.AZURE.value,
+        action="create",
+        required_permission="vm.create",
+    )
+
+    create_audit_log(
+        db,
+        correlation_id=correlation_id,
+        operation_id=operation.id,
+        user_id=current_user.id,
+        resource_id=None,
+        provider=CloudProvider.AZURE.value,
+        action="create",
+        decision="allowed",
+        reason_code="permission_granted",
+        required_permission="vm.create",
+        role_code=current_user.role.code,
+        event_type="operation",
+        http_method=request.method,
+        request_path=request.url.path,
+        details={
+            "execution_mode": "azure",
+            "resource_name": payload.name,
+        },
+    )
+
+    if not settings.azure_write_enabled:
+        mark_operation_failed(
+            db,
+            operation=operation,
+            error_code="azure_write_disabled",
+            error_message="Azure write operations are disabled.",
+            result_summary={
+                "execution_mode": "disabled",
+                "resource_name": payload.name,
+            },
+        )
+
+        db.commit()
+
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Azure write operations are disabled.",
+        )
+
+    db.commit()
+
+    location = (
+        payload.location
+        or settings.azure_default_location
+    )
+
+    try:
+        cloud_resource_id = create_virtual_machine(
+            name=payload.name,
+            role_code=current_user.role.code,
+            ssh_public_key=payload.ssh_public_key,
+            admin_username=payload.admin_username,
+            size=payload.size,
+            location=location,
+        )
+
+    except Exception as exc:
+        
+
+        mark_operation_failed(
+            db,
+            operation=operation,
+            error_code="azure_create_failed",
+            error_message=str(exc),
+            result_summary={
+                "execution_mode": "azure",
+                "resource_name": payload.name,
+            },
+        )
+
+        create_audit_log(
+            db,
+            correlation_id=correlation_id,
+            operation_id=operation.id,
+            user_id=current_user.id,
+            resource_id=None,
+            provider=CloudProvider.AZURE.value,
+            action="create",
+            decision="allowed",
+            reason_code="cloud_operation_failed",
+            required_permission="vm.create",
+            role_code=current_user.role.code,
+            event_type="operation_failure",
+            http_method=request.method,
+            request_path=request.url.path,
+            details={
+                "execution_mode": "azure",
+                "error_type": type(exc).__name__,
+            },
+        )
+
+        db.commit()
+
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "Azure virtual machine create operation failed."
+            ),
+        ) from exc
+
+    try:
+        resource = register_azure_managed_resource(
+            db=db,
+            cloud_resource_id=cloud_resource_id,
+            name=payload.name,
+            location=location,
+            current_user=current_user,
+        )
+
+        operation.resource_id = resource.id
+
+        mark_operation_success(
+            db,
+            operation=operation,
+            result_summary={
+                "execution_mode": "azure",
+                "resource_name": payload.name,
+                "cloud_resource_id": cloud_resource_id,
+            },
+        )
+
+        create_audit_log(
+            db,
+            correlation_id=correlation_id,
+            operation_id=operation.id,
+            user_id=current_user.id,
+            resource_id=resource.id,
+            provider=CloudProvider.AZURE.value,
+            action="create",
+            decision="allowed",
+            reason_code="cloud_operation_succeeded",
+            required_permission="vm.create",
+            role_code=current_user.role.code,
+            event_type="operation_success",
+            http_method=request.method,
+            request_path=request.url.path,
+            details={
+                "execution_mode": "azure",
+                "cloud_resource_id": cloud_resource_id,
+            },
+        )
+
+        db.commit()
+
+    except SQLAlchemyError as exc:
+        db.rollback()
+
+        mark_operation_failed(
+            db,
+            operation=operation,
+            error_code="azure_registration_failed",
+            error_message=(
+                "Azure virtual machine was created but "
+                "local registration failed."
+            ),
+            result_summary={
+                "execution_mode": "azure",
+                "resource_name": payload.name,
+                "cloud_resource_id": cloud_resource_id,
+            },
+        )
+
+        create_audit_log(
+            db,
+            correlation_id=correlation_id,
+            operation_id=operation.id,
+            user_id=current_user.id,
+            resource_id=None,
+            provider=CloudProvider.AZURE.value,
+            action="create",
+            decision="allowed",
+            reason_code="resource_registration_failed",
+            required_permission="vm.create",
+            role_code=current_user.role.code,
+            event_type="operation_failure",
+            http_method=request.method,
+            request_path=request.url.path,
+            details={
+                "execution_mode": "azure",
+                "error_type": "database_registration_error",
+                "orphaned_cloud_resource_id": (
+                    cloud_resource_id
+                ),
+            },
+        )
+
+        db.commit()
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Azure VM registration failed.",
+        ) from exc
+
+    return AzureInstanceCreateResponse(
+        resource_id=resource.id,
+        cloud_resource_id=cloud_resource_id,
+        provider=CloudProvider.AZURE,
         name=resource.name,
         status=resource.status,
         requested_by=current_user.id,
@@ -568,7 +821,9 @@ def execute_azure_start_action(
 
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Azure virtual machine start operation failed.",
+            detail=(
+                "Azure virtual machine start operation failed."
+            ),
         ) from exc
 
     return InstanceActionResponse(
@@ -793,7 +1048,9 @@ def execute_azure_stop_action(
 
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Azure virtual machine stop operation failed.",
+            detail=(
+                "Azure virtual machine stop operation failed."
+            ),
         ) from exc
 
     return InstanceActionResponse(
@@ -1084,6 +1341,30 @@ def create_aws_managed_instance(
 
 
 # ============================================================
+# CREATE AZURE INSTANCE
+# ============================================================
+
+
+@router.post(
+    "/azure",
+    response_model=AzureInstanceCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_azure_managed_instance(
+    request: Request,
+    payload: AzureInstanceCreateRequest,
+    current_user: CanCreateInstances,
+    db: DatabaseSession,
+) -> AzureInstanceCreateResponse:
+    return execute_azure_create_action(
+        request=request,
+        db=db,
+        payload=payload,
+        current_user=current_user,
+    )
+
+
+# ============================================================
 # AWS LIVE INVENTORY
 # ============================================================
 
@@ -1159,7 +1440,10 @@ def get_instance_status(
         if real_status is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=("AWS EC2 instance not found or not managed by the platform."),
+                detail=(
+                    "AWS EC2 instance not found or "
+                    "not managed by the platform."
+                ),
             )
 
     return InstanceStatusResponse(
@@ -1192,7 +1476,10 @@ def start_instance(
         resource_id,
     )
 
-    if provider is CloudProvider.AZURE and settings.azure_write_enabled:
+    if (
+        provider is CloudProvider.AZURE
+        and settings.azure_write_enabled
+    ):
         return execute_azure_start_action(
             request=request,
             db=db,
@@ -1200,7 +1487,10 @@ def start_instance(
             current_user=current_user,
         )
 
-    if provider is CloudProvider.AWS and settings.aws_write_enabled:
+    if (
+        provider is CloudProvider.AWS
+        and settings.aws_write_enabled
+    ):
         return execute_aws_start_action(
             request=request,
             db=db,
@@ -1241,7 +1531,10 @@ def stop_instance(
         resource_id,
     )
 
-    if provider is CloudProvider.AZURE and settings.azure_write_enabled:
+    if (
+        provider is CloudProvider.AZURE
+        and settings.azure_write_enabled
+    ):
         return execute_azure_stop_action(
             request=request,
             db=db,
@@ -1249,7 +1542,10 @@ def stop_instance(
             current_user=current_user,
         )
 
-    if provider is CloudProvider.AWS and settings.aws_write_enabled:
+    if (
+        provider is CloudProvider.AWS
+        and settings.aws_write_enabled
+    ):
         return execute_aws_stop_action(
             request=request,
             db=db,
@@ -1290,7 +1586,10 @@ def delete_instance(
         resource_id,
     )
 
-    if provider is CloudProvider.AWS and settings.aws_write_enabled:
+    if (
+        provider is CloudProvider.AWS
+        and settings.aws_write_enabled
+    ):
         return execute_aws_delete_action(
             request=request,
             db=db,
