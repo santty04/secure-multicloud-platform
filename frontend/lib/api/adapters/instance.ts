@@ -1,10 +1,11 @@
 import type {
+  InstanceCreateResponse,
   InstanceActionResponse,
   InstanceStatusResponse,
   InstanceSummaryResponse,
   LiveAwsInstanceSummaryResponse,
 } from "@/schemas/instance";
-import type { Instance, InstanceActionResult, InstanceStatus, LiveAwsInstance } from "@/types/domain";
+import type { Instance, InstanceActionResult, InstanceCreateResult, InstanceStatus, LiveAwsInstance } from "@/types/domain";
 
 export function toInstance(raw: InstanceSummaryResponse): Instance {
   return {
@@ -45,6 +46,17 @@ export function toInstanceActionResult(raw: InstanceActionResponse): InstanceAct
     resourceId: raw.resource_id,
     provider: raw.provider,
     action: raw.action,
+    status: raw.status,
+    requestedBy: raw.requested_by,
+  };
+}
+
+export function toInstanceCreateResult(raw: InstanceCreateResponse): InstanceCreateResult {
+  return {
+    resourceId: raw.resource_id,
+    cloudResourceId: raw.cloud_resource_id,
+    provider: raw.provider,
+    name: raw.name,
     status: raw.status,
     requestedBy: raw.requested_by,
   };

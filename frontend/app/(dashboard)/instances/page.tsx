@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { Plus, RefreshCw } from "lucide-react";
 import { AwsInventoryDrawer } from "@/components/instances/aws-inventory-drawer";
+import { CreateInstanceDialog } from "@/components/instances/create-instance-dialog";
+import { DeleteInstanceDialog } from "@/components/instances/delete-instance-dialog";
 import {
   AWS_INVENTORY_GRID_TEMPLATE,
   AWS_INVENTORY_MIN_WIDTH,
@@ -21,7 +23,17 @@ import { ErrorState } from "@/components/shared/error-state";
 import { TableSkeleton } from "@/components/shared/table-skeleton";
 import { Button } from "@/components/ui/button";
 import { useCurrentUser } from "@/features/auth/use-current-user";
+import { can } from "@/features/auth/can";
+import {
+  useCreateInstance,
+  useDeleteInstance,
+  useStartInstance,
+  useStopInstance,
+  type CreateInstanceVars,
+} from "@/features/instances/use-instance-action";
 import { useLiveAwsInstances, useManagedInstances } from "@/features/instances/use-instances";
+import { isApiError } from "@/lib/api/errors";
+import { notify } from "@/components/shared/toast";
 import { instanceStatusFilterValue } from "@/lib/utils/status";
 import type { Instance, LiveAwsInstance } from "@/types/domain";
 
@@ -32,15 +44,27 @@ export default function InstancesPage() {
   const currentUserQuery = useCurrentUser();
   const managedQuery = useManagedInstances();
   const awsQuery = useLiveAwsInstances();
+  const createInstance = useCreateInstance();
+  const startInstance = useStartInstance();
+  const stopInstance = useStopInstance();
+  const deleteInstance = useDeleteInstance();
 
   const [search, setSearch] = useState("");
   const [provider, setProvider] = useState<InstanceProviderFilter>("all");
   const [status, setStatus] = useState<InstanceStatusFilter>("all");
   const [drawerTarget, setDrawerTarget] = useState<Instance | null>(null);
   const [awsDrawerTarget, setAwsDrawerTarget] = useState<LiveAwsInstance | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Instance | null>(null);
+  const [busyTarget, setBusyTarget] = useState<{ id: string; action: "start" | "stop" | "delete" } | null>(null);
 
   const managedInstances = useMemo(() => managedQuery.data ?? [], [managedQuery.data]);
   const awsInstances = useMemo(() => awsQuery.data ?? [], [awsQuery.data]);
+  const permissions = currentUserQuery.data?.permissions;
+  const canCreate = can(permissions, "vm.create");
+  const canStart = can(permissions, "vm.start");
+  const canStop = can(permissions, "vm.stop");
+  const canDelete = can(permissions, "vm.delete");
 
   const filteredManaged = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -73,6 +97,81 @@ export default function InstancesPage() {
     awsQuery.refetch();
   }
 
+  function apiErrorMessage(error: unknown) {
+    return isApiError(error) ? error.message : "El backend respondió con un formato inesperado.";
+  }
+
+  function notifyActionError(title: string, error: unknown) {
+    notify({
+      kind: "error",
+      title,
+      message: apiErrorMessage(error),
+      correlationId: isApiError(error) ? error.correlationId : undefined,
+    });
+  }
+
+  function handleCreate(values: CreateInstanceVars) {
+    createInstance.mutate(values, {
+      onSuccess: (result) => {
+        setCreateOpen(false);
+        notify({
+          kind: "success",
+          title: "Instancia creada",
+          message: `${result.name} quedó registrada como recurso administrado.`,
+        });
+      },
+      onError: (error) => notifyActionError("No se pudo crear la instancia", error),
+    });
+  }
+
+  function handleAction(action: "start" | "stop", instance: Instance) {
+    setBusyTarget({ id: instance.id, action });
+    const mutation = action === "start" ? startInstance : stopInstance;
+    mutation.mutate(
+      { provider: instance.provider, resourceId: instance.id, name: instance.name },
+      {
+        onSuccess: (result) => {
+          notify({
+            kind: "success",
+            title: action === "start" ? "Inicio solicitado" : "Detención solicitada",
+            message:
+              result.status === "simulated"
+                ? "El backend registró la operación en modo simulado."
+                : "El proveedor cloud aceptó la operación.",
+          });
+        },
+        onError: (error) =>
+          notifyActionError(action === "start" ? "No se pudo iniciar la instancia" : "No se pudo detener la instancia", error),
+        onSettled: () => setBusyTarget(null),
+      },
+    );
+  }
+
+  function handleDeleteConfirm() {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    setBusyTarget({ id: target.id, action: "delete" });
+    deleteInstance.mutate(
+      { provider: target.provider, resourceId: target.id, name: target.name },
+      {
+        onSuccess: (result) => {
+          setDeleteTarget(null);
+          if (drawerTarget?.id === target.id) setDrawerTarget(null);
+          notify({
+            kind: "success",
+            title: "Eliminación solicitada",
+            message:
+              result.status === "simulated"
+                ? "El backend registró la eliminación en modo simulado."
+                : "El proveedor cloud aceptó la eliminación.",
+          });
+        },
+        onError: (error) => notifyActionError("No se pudo eliminar la instancia", error),
+        onSettled: () => setBusyTarget(null),
+      },
+    );
+  }
+
   if (managedQuery.isError && awsQuery.isError) {
     return <ErrorState error={managedQuery.error} onRetry={retryAll} />;
   }
@@ -96,6 +195,19 @@ export default function InstancesPage() {
           ) : null}
           <Button
             type="button"
+            onClick={() => {
+              createInstance.reset();
+              setCreateOpen(true);
+            }}
+            disabled={!canCreate}
+            title={canCreate ? "Crear instancia" : "Requiere permiso vm.create"}
+            className="bg-smp-accent text-white hover:bg-smp-accent-hover"
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
+            Crear
+          </Button>
+          <Button
+            type="button"
             onClick={retryAll}
             variant="outline"
             className="border-smp-line-2 bg-smp-surface-alt text-smp-ink-muted hover:text-smp-ink"
@@ -107,7 +219,7 @@ export default function InstancesPage() {
       </div>
 
       <div className="rounded-xl border border-smp-warning/30 bg-smp-warning/8 px-3.5 py-2.5 text-[12px] text-smp-warning-ink">
-        Las acciones de creación, inicio, detención y eliminación permanecen deshabilitadas en esta rama de solo lectura.
+        Las escrituras dependen de los flags del backend por proveedor; si están apagadas, FastAPI registra la acción como simulada.
       </div>
 
       <InstanceFilters
@@ -151,7 +263,18 @@ export default function InstancesPage() {
             />
           ) : (
             filteredManaged.map((instance) => (
-              <InstanceRow key={instance.id} instance={instance} onOpen={setDrawerTarget} />
+              <InstanceRow
+                key={instance.id}
+                instance={instance}
+                onOpen={setDrawerTarget}
+                onStart={(target) => handleAction("start", target)}
+                onStop={(target) => handleAction("stop", target)}
+                onDelete={setDeleteTarget}
+                canStart={canStart}
+                canStop={canStop}
+                canDelete={canDelete}
+                busyAction={busyTarget?.id === instance.id ? busyTarget.action : undefined}
+              />
             ))
           )}
         </DataTable>
@@ -201,6 +324,13 @@ export default function InstancesPage() {
         onOpenChange={(open) => {
           if (!open) setDrawerTarget(null);
         }}
+        onStart={(target) => handleAction("start", target)}
+        onStop={(target) => handleAction("stop", target)}
+        onDelete={setDeleteTarget}
+        canStart={canStart}
+        canStop={canStop}
+        canDelete={canDelete}
+        busyAction={busyTarget && busyTarget.id === drawerTarget?.id ? busyTarget.action : undefined}
       />
 
       <AwsInventoryDrawer
@@ -209,6 +339,24 @@ export default function InstancesPage() {
         onOpenChange={(open) => {
           if (!open) setAwsDrawerTarget(null);
         }}
+      />
+
+      <CreateInstanceDialog
+        open={createOpen}
+        isLoading={createInstance.isPending}
+        errorMessage={createInstance.error ? apiErrorMessage(createInstance.error) : null}
+        onSubmit={handleCreate}
+        onCancel={() => {
+          createInstance.reset();
+          setCreateOpen(false);
+        }}
+      />
+
+      <DeleteInstanceDialog
+        instance={deleteTarget}
+        isLoading={deleteInstance.isPending}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteTarget(null)}
       />
     </div>
   );

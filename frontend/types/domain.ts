@@ -57,6 +57,15 @@ export interface InstanceActionResult {
   requestedBy: string;
 }
 
+export interface InstanceCreateResult {
+  resourceId: string;
+  cloudResourceId: string;
+  provider: CloudProvider;
+  name: string;
+  status: string;
+  requestedBy: string;
+}
+
 export interface Operation {
   id: string;
   correlationId: string;
