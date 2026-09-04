@@ -63,35 +63,12 @@ class AWSInstanceCreateResponse(BaseModel):
     status: str
     requested_by: uuid.UUID
 
+
 class AzureInstanceCreateRequest(BaseModel):
     name: str = Field(
         min_length=1,
         max_length=64,
         pattern=r"^[A-Za-z0-9-]+$",
-    )
-
-    size: str | None = Field(
-        default=None,
-        min_length=1,
-        max_length=64,
-    )
-
-    location: str | None = Field(
-        default=None,
-        min_length=1,
-        max_length=64,
-    )
-
-    admin_username: str = Field(
-        default="azureadmin",
-        min_length=1,
-        max_length=32,
-        pattern=r"^[A-Za-z][A-Za-z0-9_-]*$",
-    )
-
-    ssh_public_key: str = Field(
-        min_length=20,
-        max_length=4096,
     )
 
 

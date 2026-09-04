@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     azure_managed_subnet_id: str | None = None
     azure_default_vm_size: str = "Standard_B2pts_v2"
     azure_default_location: str = "centralus"
+    azure_default_admin_username: str = "azureadmin"
+    azure_default_ssh_public_key: str | None = None
 
     # ============================================================
     # AWS
