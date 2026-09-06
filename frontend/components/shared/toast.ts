@@ -22,7 +22,7 @@ export function notify({
     duration: 7000,
     action: correlationId
       ? {
-          label: correlationId,
+          label: "Copiar ID",
           onClick: () => {
             void navigator.clipboard.writeText(correlationId);
           },

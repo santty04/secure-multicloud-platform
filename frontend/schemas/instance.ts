@@ -54,17 +54,6 @@ export const azureInstanceCreateRequestSchema = z.object({
     .min(1, "Ingresa un nombre.")
     .max(64, "Máximo 64 caracteres.")
     .regex(/^[A-Za-z0-9-]+$/, "Usa letras, números o guion."),
-  size: z.string().trim().min(1).max(64).optional(),
-  location: z.string().trim().min(1).max(64).optional(),
-  admin_username: z
-    .string()
-    .min(1, "Ingresa un usuario administrador.")
-    .max(32, "Máximo 32 caracteres.")
-    .regex(/^[A-Za-z][A-Za-z0-9_-]*$/, "Debe empezar con una letra."),
-  ssh_public_key: z
-    .string()
-    .min(20, "Ingresa una llave pública SSH válida.")
-    .max(4096, "La llave es demasiado larga."),
 });
 export type AzureInstanceCreateRequest = z.infer<typeof azureInstanceCreateRequestSchema>;
 
