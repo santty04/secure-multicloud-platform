@@ -37,7 +37,7 @@ resource "azurerm_container_app" "backend" {
 
     container {
       name   = "backend"
-      image  = "${azurerm_container_registry.backend.login_server}/smp-backend:0.1.1"
+      image  = "${azurerm_container_registry.backend.login_server}/smp-backend:0.1.3"
       cpu    = 0.25
       memory = "0.5Gi"
 
@@ -117,6 +117,26 @@ resource "azurerm_container_app" "backend" {
       env {
         name  = "AZURE_ADMINISTRATOR_CLIENT_ID"
         value = azurerm_user_assigned_identity.administrator.client_id
+      }
+
+      env {
+        name  = "AZURE_RESOURCE_GROUP"
+        value = azurerm_resource_group.main.name
+      }
+
+      env {
+        name  = "AZURE_MANAGED_SUBNET_ID"
+        value = azurerm_subnet.app.id
+      }
+
+      env {
+        name  = "AZURE_DEFAULT_VM_SIZE"
+        value = "Standard_B2pts_v2"
+      }
+
+      env {
+        name  = "AZURE_DEFAULT_LOCATION"
+        value = "centralus"
       }
 
       # Administrative kill switches.
