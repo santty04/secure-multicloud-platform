@@ -25,23 +25,39 @@ function actionButtonClass(kind: "neutral" | "danger", disabled: boolean) {
 /**
  * One table row rendered as a `<div>` (not `<tr>`) using the exact
  * `gridTemplateColumns` the page passes to `<DataTable>` — see that
- * component's doc comment. Write actions are intentionally disabled in this
- * read-only integration branch, so this row only opens the detail drawer.
+ * component's doc comment.
  */
 export function InstanceRow({
   instance,
   onOpen,
+  onStart,
+  onStop,
+  onDelete,
+  canStart,
+  canStop,
+  canDelete,
+  busyAction,
 }: {
   instance: Instance;
   onOpen: (instance: Instance) => void;
+  onStart: (instance: Instance) => void;
+  onStop: (instance: Instance) => void;
+  onDelete: (instance: Instance) => void;
+  canStart: boolean;
+  canStop: boolean;
+  canDelete: boolean;
+  busyAction?: "start" | "stop" | "delete";
 }) {
   const { label, tone } = instanceStatusPresentation(instance.status);
   const bucket = instanceStatusFilterValue(instance.status);
+  const startDisabled = !canStart || bucket === "running" || busyAction !== undefined;
+  const stopDisabled = !canStop || bucket === "stopped" || busyAction !== undefined;
+  const deleteDisabled = !canDelete || busyAction !== undefined;
   const startTitle =
-    bucket === "running" ? "La instancia ya está en ejecución" : "Iniciar instancia no integrado";
+    !canStart ? "Requiere permiso vm.start" : bucket === "running" ? "La instancia ya está en ejecución" : "Iniciar instancia";
   const stopTitle =
-    bucket === "stopped" ? "La instancia ya está detenida" : "Detener instancia no integrado";
-  const deleteTitle = "Eliminar instancia no integrado";
+    !canStop ? "Requiere permiso vm.stop" : bucket === "stopped" ? "La instancia ya está detenida" : "Detener instancia";
+  const deleteTitle = canDelete ? "Eliminar instancia" : "Requiere permiso vm.delete";
 
   return (
     <div
@@ -76,28 +92,31 @@ export function InstanceRow({
       <span className="flex justify-end gap-1.25">
         <button
           type="button"
-          disabled
+          onClick={() => onStart(instance)}
+          disabled={startDisabled}
           title={startTitle}
           aria-label={startTitle}
-          className={actionButtonClass("neutral", true)}
+          className={actionButtonClass("neutral", startDisabled)}
         >
           <Play className="size-3.25" aria-hidden="true" />
         </button>
         <button
           type="button"
-          disabled
+          onClick={() => onStop(instance)}
+          disabled={stopDisabled}
           title={stopTitle}
           aria-label={stopTitle}
-          className={actionButtonClass("neutral", true)}
+          className={actionButtonClass("neutral", stopDisabled)}
         >
           <Square className="size-3.25" aria-hidden="true" />
         </button>
         <button
           type="button"
-          disabled
+          onClick={() => onDelete(instance)}
+          disabled={deleteDisabled}
           title={deleteTitle}
           aria-label={deleteTitle}
-          className={actionButtonClass("danger", true)}
+          className={actionButtonClass("danger", deleteDisabled)}
         >
           <Trash2 className="size-3.25" aria-hidden="true" />
         </button>

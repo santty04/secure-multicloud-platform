@@ -507,6 +507,20 @@ def execute_azure_create_action(
         request.state.correlation_id,
     )
 
+    existing_resource = db.scalar(
+    select(ManagedResource).where(
+        ManagedResource.provider == CloudProvider.AZURE.value,
+        ManagedResource.name == payload.name,
+        ManagedResource.is_managed.is_(True),
+    )
+)
+
+    if existing_resource is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An Azure virtual machine with this name is already managed.",
+        )
+
     operation = create_operation(
         db,
         correlation_id=correlation_id,
@@ -559,18 +573,36 @@ def execute_azure_create_action(
 
     db.commit()
 
-    location = (
-        payload.location
-        or settings.azure_default_location
-    )
+    if not settings.azure_default_ssh_public_key:
+        mark_operation_failed(
+            db,
+            operation=operation,
+            error_code="azure_ssh_key_not_configured",
+            error_message=(
+                "Azure default SSH public key is not configured."
+            ),
+            result_summary={
+                "execution_mode": "azure",
+                "resource_name": payload.name,
+            },
+        )
+
+        
+
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Azure VM creation is not configured.",
+        )
+
+    location = settings.azure_default_location
 
     try:
         cloud_resource_id = create_virtual_machine(
             name=payload.name,
             role_code=current_user.role.code,
-            ssh_public_key=payload.ssh_public_key,
-            admin_username=payload.admin_username,
-            size=payload.size,
+            ssh_public_key=settings.azure_default_ssh_public_key,
+            admin_username=settings.azure_default_admin_username,
+            size=settings.azure_default_vm_size,
             location=location,
         )
 

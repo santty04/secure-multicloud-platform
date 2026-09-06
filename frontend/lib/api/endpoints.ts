@@ -6,6 +6,8 @@ export const endpoints = {
   me: () => "/api/v1/auth/me",
 
   instances: () => "/api/v1/instances",
+  createAwsInstance: () => "/api/v1/instances/aws",
+  createAzureInstance: () => "/api/v1/instances/azure",
   liveAwsInstances: () => "/api/v1/instances/aws/live",
   instanceStatus: (provider: CloudProvider, resourceId: string) =>
     `/api/v1/instances/${provider}/${resourceId}/status`,

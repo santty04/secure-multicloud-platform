@@ -39,6 +39,45 @@ export const instanceStatusResponseSchema = z.object({
 });
 export type InstanceStatusResponse = z.infer<typeof instanceStatusResponseSchema>;
 
+export const awsInstanceCreateRequestSchema = z.object({
+  name: z
+    .string()
+    .min(1, "Ingresa un nombre.")
+    .max(64, "Máximo 64 caracteres.")
+    .regex(/^[A-Za-z0-9._-]+$/, "Usa letras, números, punto, guion o guion bajo."),
+});
+export type AwsInstanceCreateRequest = z.infer<typeof awsInstanceCreateRequestSchema>;
+
+export const azureInstanceCreateRequestSchema = z.object({
+  name: z
+    .string()
+    .min(1, "Ingresa un nombre.")
+    .max(64, "Máximo 64 caracteres.")
+    .regex(/^[A-Za-z0-9-]+$/, "Usa letras, números o guion."),
+  size: z.string().trim().min(1).max(64).optional(),
+  location: z.string().trim().min(1).max(64).optional(),
+  admin_username: z
+    .string()
+    .min(1, "Ingresa un usuario administrador.")
+    .max(32, "Máximo 32 caracteres.")
+    .regex(/^[A-Za-z][A-Za-z0-9_-]*$/, "Debe empezar con una letra."),
+  ssh_public_key: z
+    .string()
+    .min(20, "Ingresa una llave pública SSH válida.")
+    .max(4096, "La llave es demasiado larga."),
+});
+export type AzureInstanceCreateRequest = z.infer<typeof azureInstanceCreateRequestSchema>;
+
+export const instanceCreateResponseSchema = z.object({
+  resource_id: z.string(),
+  cloud_resource_id: z.string(),
+  provider: cloudProviderSchema,
+  name: z.string(),
+  status: z.string(),
+  requested_by: z.string(),
+});
+export type InstanceCreateResponse = z.infer<typeof instanceCreateResponseSchema>;
+
 /**
  * `InstanceActionResponse` — start/stop/delete. These calls are
  * synchronous: the response IS the final result, there is no

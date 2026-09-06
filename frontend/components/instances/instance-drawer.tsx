@@ -1,7 +1,7 @@
 import { DetailDrawer } from "@/components/shared/detail-drawer";
 import { providerFullName } from "@/components/shared/provider-badge";
 import { useInstanceStatus } from "@/features/instances/use-instances";
-import { instanceStatusPresentation } from "@/lib/utils/status";
+import { instanceStatusFilterValue, instanceStatusPresentation } from "@/lib/utils/status";
 import type { Instance } from "@/types/domain";
 
 function wideButtonClass(kind: "neutral" | "danger", disabled: boolean) {
@@ -27,10 +27,24 @@ export function InstanceDrawer({
   instance,
   open,
   onOpenChange,
+  onStart,
+  onStop,
+  onDelete,
+  canStart,
+  canStop,
+  canDelete,
+  busyAction,
 }: {
   instance: Instance | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onStart: (instance: Instance) => void;
+  onStop: (instance: Instance) => void;
+  onDelete: (instance: Instance) => void;
+  canStart: boolean;
+  canStop: boolean;
+  canDelete: boolean;
+  busyAction?: "start" | "stop" | "delete";
 }) {
   const statusQuery = useInstanceStatus({
     provider: instance?.provider,
@@ -44,6 +58,10 @@ export function InstanceDrawer({
 
   const effectiveStatus = statusQuery.data?.status ?? instance.status;
   const { label } = instanceStatusPresentation(effectiveStatus);
+  const bucket = instanceStatusFilterValue(effectiveStatus);
+  const startDisabled = !canStart || bucket === "running" || busyAction !== undefined;
+  const stopDisabled = !canStop || bucket === "stopped" || busyAction !== undefined;
+  const deleteDisabled = !canDelete || busyAction !== undefined;
   const statusDetail = statusQuery.isFetching
     ? "Consultando estado real..."
     : statusQuery.isError
@@ -65,11 +83,7 @@ export function InstanceDrawer({
               title: "Estado:",
               text: statusQuery.error.message,
             }
-          : {
-              tone: "warning",
-              title: "Solo lectura:",
-              text: "crear, iniciar, detener y eliminar todavía no están integrados en esta vista.",
-            }
+          : undefined
       }
       fields={[
         { label: "Estado", value: label },
@@ -94,30 +108,33 @@ export function InstanceDrawer({
           </button>
           <button
             type="button"
-            disabled
-            title="Iniciar instancia no integrado"
-            aria-label="Iniciar instancia no integrado"
-            className={wideButtonClass("neutral", true)}
+            onClick={() => onStart(instance)}
+            disabled={startDisabled}
+            title={!canStart ? "Requiere permiso vm.start" : "Iniciar instancia"}
+            aria-label={!canStart ? "Requiere permiso vm.start" : "Iniciar instancia"}
+            className={wideButtonClass("neutral", startDisabled)}
           >
-            Iniciar
+            {busyAction === "start" ? "Iniciando..." : "Iniciar"}
           </button>
           <button
             type="button"
-            disabled
-            title="Detener instancia no integrado"
-            aria-label="Detener instancia no integrado"
-            className={wideButtonClass("neutral", true)}
+            onClick={() => onStop(instance)}
+            disabled={stopDisabled}
+            title={!canStop ? "Requiere permiso vm.stop" : "Detener instancia"}
+            aria-label={!canStop ? "Requiere permiso vm.stop" : "Detener instancia"}
+            className={wideButtonClass("neutral", stopDisabled)}
           >
-            Detener
+            {busyAction === "stop" ? "Deteniendo..." : "Detener"}
           </button>
           <button
             type="button"
-            disabled
-            title="Eliminar instancia no integrado"
-            aria-label="Eliminar instancia no integrado"
-            className={wideButtonClass("danger", true)}
+            onClick={() => onDelete(instance)}
+            disabled={deleteDisabled}
+            title={canDelete ? "Eliminar instancia" : "Requiere permiso vm.delete"}
+            aria-label={canDelete ? "Eliminar instancia" : "Requiere permiso vm.delete"}
+            className={wideButtonClass("danger", deleteDisabled)}
           >
-            Eliminar
+            {busyAction === "delete" ? "Eliminando..." : "Eliminar"}
           </button>
         </>
       }
