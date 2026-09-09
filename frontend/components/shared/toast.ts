@@ -11,12 +11,12 @@ export function notify({
   message,
   correlationId,
 }: {
-  kind: "success" | "error";
+  kind: "success" | "error" | "info";
   title: string;
   message: string;
   correlationId?: string;
 }) {
-  const fn = kind === "error" ? toast.error : toast.success;
+  const fn = kind === "error" ? toast.error : kind === "info" ? toast.info : toast.success;
   fn(title, {
     description: message,
     duration: 7000,

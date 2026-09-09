@@ -158,11 +158,11 @@ export default function InstancesPage() {
           setDeleteTarget(null);
           if (drawerTarget?.id === target.id) setDrawerTarget(null);
           notify({
-            kind: "success",
-            title: "Eliminación solicitada",
+            kind: result.status === "simulated" ? "info" : "success",
+            title: result.status === "simulated" ? "Eliminación simulada" : "Eliminación en proceso",
             message:
               result.status === "simulated"
-                ? "La eliminación quedó registrada, pero no modificó recursos reales."
+                ? "La acción quedó registrada, pero la instancia seguirá apareciendo porque no se modificaron recursos reales."
                 : "La instancia está procesando la eliminación.",
           });
         },
