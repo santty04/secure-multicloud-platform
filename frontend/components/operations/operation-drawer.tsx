@@ -18,12 +18,12 @@ function traceFor(operation: Operation): DrawerTraceStep[] {
   const steps: DrawerTraceStep[] = [
     {
       title: "Solicitud recibida",
-      detail: "FastAPI · correlation_id generado",
+      detail: "Se registró la acción para seguimiento.",
       color: "var(--color-smp-accent-soft)",
     },
     {
-      title: "JWT validado · RBAC de aplicación",
-      detail: `permiso requerido: ${operation.requiredPermission} → concedido`,
+      title: "Permisos validados",
+      detail: `permiso requerido: ${operation.requiredPermission} · concedido`,
       color: "var(--color-smp-success)",
     },
   ];
@@ -31,7 +31,7 @@ function traceFor(operation: Operation): DrawerTraceStep[] {
   if (operation.status === "success") {
     steps.push({
       title: "Operación completada",
-      detail: "operations.status = success",
+      detail: "La acción finalizó correctamente.",
       color: "var(--color-smp-success)",
     });
   } else if (operation.status === "failed") {
@@ -43,7 +43,7 @@ function traceFor(operation: Operation): DrawerTraceStep[] {
   } else {
     steps.push({
       title: "Operación en curso",
-      detail: "operations.status = pending",
+      detail: "La acción todavía no ha finalizado.",
       color: "var(--color-smp-warning)",
     });
   }

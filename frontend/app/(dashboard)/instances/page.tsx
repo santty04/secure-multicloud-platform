@@ -98,7 +98,7 @@ export default function InstancesPage() {
   }
 
   function apiErrorMessage(error: unknown) {
-    return isApiError(error) ? error.message : "El backend respondió con un formato inesperado.";
+    return isApiError(error) ? error.message : "No se pudo completar la acción. Inténtalo de nuevo.";
   }
 
   function notifyActionError(title: string, error: unknown) {
@@ -136,8 +136,8 @@ export default function InstancesPage() {
             title: action === "start" ? "Inicio solicitado" : "Detención solicitada",
             message:
               result.status === "simulated"
-                ? "El backend registró la operación en modo simulado."
-                : "El proveedor cloud aceptó la operación.",
+                ? "La acción quedó registrada, pero no modificó recursos reales."
+                : "La instancia está procesando el cambio.",
           });
         },
         onError: (error) =>
@@ -162,8 +162,8 @@ export default function InstancesPage() {
             title: "Eliminación solicitada",
             message:
               result.status === "simulated"
-                ? "El backend registró la eliminación en modo simulado."
-                : "El proveedor cloud aceptó la eliminación.",
+                ? "La eliminación quedó registrada, pero no modificó recursos reales."
+                : "La instancia está procesando la eliminación.",
           });
         },
         onError: (error) => notifyActionError("No se pudo eliminar la instancia", error),
@@ -182,7 +182,7 @@ export default function InstancesPage() {
         <div>
           <h1 className="mb-1 text-2xl font-semibold tracking-tight text-smp-ink">Instancias</h1>
           <p className="text-[13px] text-smp-ink-dim">
-            Recursos reales de FastAPI e inventario AWS live separados para no mezclar administrado con descubierto.
+            Administra recursos registrados y consulta el inventario detectado en tus proveedores.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -219,7 +219,7 @@ export default function InstancesPage() {
       </div>
 
       <div className="rounded-xl border border-smp-warning/30 bg-smp-warning/8 px-3.5 py-2.5 text-[12px] text-smp-warning-ink">
-        Las escrituras dependen de los flags del backend por proveedor; si están apagadas, FastAPI registra la acción como simulada.
+        Algunas acciones pueden ejecutarse en modo simulado según la configuración del proveedor.
       </div>
 
       <InstanceFilters
@@ -235,7 +235,7 @@ export default function InstancesPage() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold text-smp-ink">Recursos administrados por la plataforma</h2>
-            <p className="text-[11.5px] text-smp-ink-dim">Fuente: GET /api/v1/instances.</p>
+            <p className="text-[11.5px] text-smp-ink-dim">Instancias registradas para administración.</p>
           </div>
           {managedQuery.isError ? (
             <span className="text-[12px] text-smp-danger-text">{managedQuery.error.message}</span>
@@ -257,7 +257,7 @@ export default function InstancesPage() {
               title={managedInstances.length === 0 ? "Sin recursos administrados" : "Sin resultados"}
               description={
                 managedInstances.length === 0
-                  ? "FastAPI no devolvió recursos administrados por la plataforma."
+                  ? "Aún no hay recursos registrados para administración."
                   : "Ningún recurso administrado coincide con los filtros aplicados."
               }
             />
@@ -284,7 +284,7 @@ export default function InstancesPage() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold text-smp-ink">Inventario AWS real</h2>
-            <p className="text-[11.5px] text-smp-ink-dim">Fuente: GET /api/v1/instances/aws/live.</p>
+            <p className="text-[11.5px] text-smp-ink-dim">Instancias detectadas directamente en AWS.</p>
           </div>
           {awsQuery.isError ? (
             <span className="text-[12px] text-smp-danger-text">{awsQuery.error.message}</span>

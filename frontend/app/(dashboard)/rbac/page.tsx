@@ -55,8 +55,7 @@ export default function RbacPage() {
       <div>
         <h1 className="m-0 mb-1 text-2xl font-semibold tracking-tight text-smp-ink">Matriz de permisos</h1>
         <p className="m-0 text-[13px] text-smp-ink-muted">
-          Permisos de la plataforma (RBAC de aplicación). El backend revalida cada solicitud contra el rol
-          codificado en el JWT del usuario, independientemente de lo que muestre esta pantalla.
+          Consulta qué acciones puede realizar cada rol y cuáles están disponibles para tu usuario.
         </p>
       </div>
 
@@ -90,9 +89,8 @@ export default function RbacPage() {
       </DataTable>
 
       <div className="text-pretty rounded-2xl border border-smp-line-soft bg-smp-surface-alt px-4 py-4 text-[12.5px] text-smp-ink-muted">
-        Deshabilitar botones en la interfaz solo mejora la experiencia. Toda solicitud vuelve a validarse en
-        FastAPI contra el rol del JWT; un intento denegado genera un registro de auditoría con resultado{" "}
-        <code className="font-mono text-smp-danger-text">denied</code> y su correlation ID.
+        La plataforma valida cada acción con el rol del usuario. Los intentos no permitidos quedan registrados
+        en auditoría.
       </div>
     </div>
   );
