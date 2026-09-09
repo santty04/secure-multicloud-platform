@@ -20,6 +20,7 @@ const STATUS_OPTIONS: { value: InstanceStatusFilter; label: string }[] = [
   { value: "all", label: "Todos los estados" },
   { value: "running", label: "En ejecución" },
   { value: "stopped", label: "Detenida" },
+  { value: "pending", label: "Pendiente" },
   { value: "other", label: "Otro" },
 ];
 

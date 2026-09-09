@@ -16,7 +16,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const hasToken = useHasAccessToken();
   const login = useLogin();
-  const currentUser = useCurrentUser({ enabled: hasToken });
+  const currentUser = useCurrentUser({ enabled: hasToken === true });
 
   const form = useForm<LoginRequest>({
     resolver: zodResolver(loginRequestSchema),
@@ -43,9 +43,9 @@ export default function LoginPage() {
 
   function loginErrorMessage(): string | null {
     if (!login.error) return null;
-    if (!isApiError(login.error)) return "El backend respondió con un formato inesperado.";
+    if (!isApiError(login.error)) return "No se pudo iniciar sesión. Inténtalo de nuevo.";
     if (login.error.code === "network_error") {
-      return "No se pudo contactar al backend. Verifica que FastAPI esté disponible.";
+      return "No se pudo conectar con la plataforma. Verifica el servicio e inténtalo de nuevo.";
     }
     if (login.error.status === 401) return "Correo o contraseña incorrectos.";
     if (login.error.status === 422) return "Revisa el correo y la contraseña ingresados.";
@@ -113,7 +113,7 @@ export default function LoginPage() {
         </div>
 
         <div className="relative font-mono text-[11.5px] text-smp-ink-faint">
-          v0.9.0-demo · FastAPI + PostgreSQL · JWT
+          v0.9.0-demo · Plataforma segura multicloud
         </div>
       </div>
 

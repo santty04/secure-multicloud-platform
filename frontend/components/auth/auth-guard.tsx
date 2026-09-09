@@ -41,10 +41,10 @@ function ShellSkeleton() {
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const hasToken = useHasAccessToken();
-  const { data: user, isPending, isError } = useCurrentUser({ enabled: hasToken });
+  const { data: user, isPending, isError } = useCurrentUser({ enabled: hasToken === true });
 
   useEffect(() => {
-    if (!hasToken) router.replace("/login");
+    if (hasToken === false) router.replace("/login");
   }, [hasToken, router]);
 
   useEffect(() => {
@@ -57,7 +57,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     });
   }, [router]);
 
-  if (!hasToken || isPending) return <ShellSkeleton />;
+  if (hasToken !== true || isPending) return <ShellSkeleton />;
   if (isError || !user) return null;
 
   return (

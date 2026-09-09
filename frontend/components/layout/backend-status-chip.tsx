@@ -13,14 +13,14 @@ export function BackendStatusChip() {
   const isChecking = health.isPending || health.isFetching;
   const isDown = !health.isPending && (health.isError || health.data?.status !== "ok");
 
-  const label = health.isPending ? "Comprobando backend…" : isDown ? "Backend caído" : "Backend operativo";
+  const label = health.isPending ? "Comprobando servicio…" : isDown ? "Servicio no disponible" : "Servicio operativo";
 
   return (
     <button
       type="button"
       onClick={() => health.refetch()}
-      title="Comprobar estado del backend"
-      aria-label="Comprobar estado del backend"
+      title="Comprobar estado del servicio"
+      aria-label="Comprobar estado del servicio"
       className={cn(
         "flex items-center gap-2 rounded-full border px-[11px] py-[5px] text-[11.5px] font-semibold transition-colors",
         health.isPending

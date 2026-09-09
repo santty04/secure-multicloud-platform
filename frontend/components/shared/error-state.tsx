@@ -22,7 +22,7 @@ export function ErrorState({
       <div className="mx-auto mb-4 grid size-11 place-items-center rounded-xl bg-smp-danger/14">
         <WifiOff className="size-6 text-smp-danger-text" />
       </div>
-      <h2 className="mb-2 text-[19px] font-semibold text-smp-ink">No hay conexión con el backend</h2>
+      <h2 className="mb-2 text-[19px] font-semibold text-smp-ink">No hay conexión con el servicio</h2>
       <p className="mb-1.5 text-balance text-[13.5px] text-smp-ink-muted">{error.message}</p>
       <Button onClick={onRetry} className="bg-smp-accent hover:bg-smp-accent-hover">
         Reintentar
