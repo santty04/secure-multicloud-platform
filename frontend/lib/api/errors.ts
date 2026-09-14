@@ -11,11 +11,11 @@ export type ApiError = {
 
 const FRIENDLY_MESSAGE: Record<number, string> = {
   401: "Tu sesión expiró o las credenciales no son válidas.",
-  403: "No tienes permiso para realizar esta acción. El backend la rechazó.",
+  403: "No tienes permiso para realizar esta acción.",
   404: "El recurso solicitado no existe o ya no está administrado por la plataforma.",
   422: "La solicitud contiene datos inválidos.",
-  502: "El proveedor cloud no respondió correctamente a la solicitud.",
-  503: "Esta operación está deshabilitada en el backend para este proveedor.",
+  502: "El proveedor no respondió correctamente.",
+  503: "Esta operación no está disponible para este proveedor.",
 };
 
 function isRetryable(status: number): boolean {
@@ -59,7 +59,7 @@ export function networkError(): ApiError {
   return {
     code: "network_error",
     message:
-      "No se pudo contactar al backend. No se muestran datos en caché para evitar decisiones sobre información desactualizada.",
+      "No se pudo conectar con la plataforma. No se muestran datos guardados para evitar decisiones con información desactualizada.",
     status: 0,
     retryable: true,
   };
@@ -68,7 +68,7 @@ export function networkError(): ApiError {
 export function unexpectedResponseError(): ApiError {
   return {
     code: "unexpected_response",
-    message: "El backend respondió con un formato inesperado.",
+    message: "La plataforma respondió con un formato inesperado.",
     status: 0,
     retryable: false,
   };

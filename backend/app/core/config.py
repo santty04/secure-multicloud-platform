@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,8 +10,27 @@ class Settings(BaseSettings):
     app_name: str = "Secure Multicloud Platform API"
     debug: bool = False
 
-    database_url: str
-    test_database_url: str
+    cors_allowed_origins: list[str] = Field(default_factory=list)
+
+    # ============================================================
+    # DATABASE
+    # ============================================================
+
+    # Local development / tests
+    database_url: str | None = None
+    test_database_url: str | None = None
+
+    # Azure PostgreSQL
+    database_host: str | None = None
+    database_port: int = 5432
+    database_name: str = "secure_multicloud"
+    database_user: str = "id-smp-backend-dev"
+    database_application_user: str = "id-smp-backend-dev"
+    database_application_principal_id: str | None = None
+
+    # ============================================================
+    # AUTH
+    # ============================================================
 
     secret_key: str
     access_token_expire_minutes: int = 30
@@ -26,6 +46,14 @@ class Settings(BaseSettings):
     azure_viewer_client_id: str | None = None
     azure_operator_client_id: str | None = None
     azure_administrator_client_id: str | None = None
+    azure_resource_group: str | None = None
+    azure_managed_subnet_id: str | None = None
+    azure_default_vm_size: str = "Standard_B2pts_v2"
+    azure_default_location: str = "centralus"
+    azure_default_admin_username: str = "azureadmin"
+    azure_default_ssh_public_key: str | None = None
+
+    azure_max_managed_vms: int = 2
 
     # ============================================================
     # AWS
@@ -45,24 +73,23 @@ class Settings(BaseSettings):
     aws_instance_type: str = "t3.micro"
     aws_root_volume_size_gb: int = 8
 
-    # AWS federation from Azure
+    # ============================================================
+    # AWS FEDERATION FROM AZURE
+    # ============================================================
+
     aws_federation_audience: str | None = None
     azure_managed_identity_client_id: str | None = None
 
-    # ============================================================
-    # AI
-    # ============================================================
-
+    # AI Infrastructure Advisor
     ai_provider: str = "ollama"
 
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "qwen3:4b-instruct"
-    ollama_timeout_seconds: float = 120.0
+    ollama_timeout_seconds: int = 120
 
     ai_advisor_max_instances: int = 5
     ai_advisor_min_disk_size_gb: int = 8
     ai_advisor_max_disk_size_gb: int = 50
-
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

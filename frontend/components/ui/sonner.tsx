@@ -39,6 +39,10 @@ const Toaster = ({ ...props }: ToasterProps) => {
       toastOptions={{
         classNames: {
           toast: "cn-toast",
+          content: "cn-toast-content",
+          title: "cn-toast-title",
+          description: "cn-toast-description",
+          actionButton: "cn-toast-action",
         },
       }}
       {...props}

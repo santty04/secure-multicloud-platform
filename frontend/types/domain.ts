@@ -31,12 +31,38 @@ export interface Instance {
   isManaged: boolean;
 }
 
+export interface LiveAwsInstance {
+  instanceId: string;
+  name: string;
+  state: string;
+  instanceType: string;
+  privateIp: string | null;
+  provider: "aws";
+  region: string;
+}
+
+export interface InstanceStatus {
+  resourceId: string;
+  provider: CloudProvider;
+  name: string;
+  status: string;
+}
+
 export interface InstanceActionResult {
   resourceId: string;
   provider: CloudProvider;
   action: "start" | "stop" | "delete";
   /** "success" when a real cloud write ran, "simulated" when that provider's writes are disabled backend-side. */
   status: "success" | "simulated";
+  requestedBy: string;
+}
+
+export interface InstanceCreateResult {
+  resourceId: string;
+  cloudResourceId: string;
+  provider: CloudProvider;
+  name: string;
+  status: string;
   requestedBy: string;
 }
 

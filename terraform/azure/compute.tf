@@ -42,8 +42,11 @@ resource "azurerm_linux_virtual_machine" "main" {
   disable_password_authentication = true
 
   admin_ssh_key {
-    username   = "azureadmin"
-    public_key = file(var.ssh_public_key_path)
+    username = "azureadmin"
+
+    public_key = file(
+      "${path.module}/keys/secure-multicloud-azure.pub"
+    )
   }
 
   os_disk {

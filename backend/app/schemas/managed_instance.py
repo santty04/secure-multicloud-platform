@@ -62,3 +62,20 @@ class AWSInstanceCreateResponse(BaseModel):
     name: str
     status: str
     requested_by: uuid.UUID
+
+
+class AzureInstanceCreateRequest(BaseModel):
+    name: str = Field(
+        min_length=1,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9-]+$",
+    )
+
+
+class AzureInstanceCreateResponse(BaseModel):
+    resource_id: uuid.UUID
+    cloud_resource_id: str
+    provider: CloudProvider
+    name: str
+    status: str
+    requested_by: uuid.UUID

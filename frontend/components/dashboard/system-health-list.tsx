@@ -25,8 +25,8 @@ export function SystemHealthList() {
 
   const rows: HealthRow[] = [
     {
-      label: "API FastAPI · /health",
-      value: apiHealthy ? "200 OK" : "down",
+      label: "Servicio de plataforma",
+      value: apiHealthy ? "operativo" : "sin conexión",
       dotClassName: apiHealthy ? "bg-smp-success" : "bg-smp-danger-text",
       textClassName: apiHealthy ? "text-smp-success" : "text-smp-danger-text",
     },
@@ -40,7 +40,7 @@ export function SystemHealthList() {
     // eslint-disable-next-line react-hooks/purity
     const minutesLeft = Math.max(0, Math.round((expiry.getTime() - Date.now()) / 60_000));
     rows.push({
-      label: "Sesión JWT",
+      label: "Sesión",
       value: `expira en ${minutesLeft} min`,
       dotClassName: "bg-smp-accent-soft",
       textClassName: "text-smp-accent-soft",

@@ -25,13 +25,11 @@ export function DeleteInstanceDialog({
       description={
         instance ? (
           <>
-            Se solicitará al backend la eliminación de{" "}
-            <strong className="font-semibold text-smp-ink">{instance.name}</strong>. Esta acción es
-            irreversible y quedará registrada en auditoría.
+            Se eliminará <strong className="font-semibold text-smp-ink">{instance.name}</strong>. Esta acción no
+            se puede deshacer y quedará registrada en auditoría.
           </>
         ) : null
       }
-      code={instance ? `DELETE /api/v1/instances/${instance.provider}/${instance.id}` : undefined}
       confirmLabel="Eliminar definitivamente"
       isDestructive
       isLoading={isLoading}

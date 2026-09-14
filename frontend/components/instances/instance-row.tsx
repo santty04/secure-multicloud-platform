@@ -1,7 +1,6 @@
 import { Info, Play, Square, Trash2 } from "lucide-react";
 import { ProviderBadge } from "@/components/shared/provider-badge";
 import { StatusPill } from "@/components/shared/status-pill";
-import { can } from "@/features/auth/can";
 import { instanceStatusFilterValue, instanceStatusPresentation } from "@/lib/utils/status";
 import type { Instance } from "@/types/domain";
 
@@ -26,52 +25,38 @@ function actionButtonClass(kind: "neutral" | "danger", disabled: boolean) {
 /**
  * One table row rendered as a `<div>` (not `<tr>`) using the exact
  * `gridTemplateColumns` the page passes to `<DataTable>` — see that
- * component's doc comment. Mutations (`useStartInstance()` etc.) are called
- * once at the page level and passed down as callbacks + per-row busy flags,
- * never invoked here directly.
+ * component's doc comment.
  */
 export function InstanceRow({
   instance,
-  permissions,
-  isStarting,
-  isStopping,
-  isDeleting,
+  onOpen,
   onStart,
   onStop,
-  onDeleteRequest,
-  onOpen,
+  onDelete,
+  canStart,
+  canStop,
+  canDelete,
+  busyAction,
 }: {
   instance: Instance;
-  permissions: string[] | undefined;
-  isStarting: boolean;
-  isStopping: boolean;
-  isDeleting: boolean;
+  onOpen: (instance: Instance) => void;
   onStart: (instance: Instance) => void;
   onStop: (instance: Instance) => void;
-  onDeleteRequest: (instance: Instance) => void;
-  onOpen: (instance: Instance) => void;
+  onDelete: (instance: Instance) => void;
+  canStart: boolean;
+  canStop: boolean;
+  canDelete: boolean;
+  busyAction?: "start" | "stop" | "delete";
 }) {
   const { label, tone } = instanceStatusPresentation(instance.status);
   const bucket = instanceStatusFilterValue(instance.status);
-
-  const canStart = can(permissions, "vm.start");
-  const canStop = can(permissions, "vm.stop");
-  const canDelete = can(permissions, "vm.delete");
-
-  const startDisabled = !canStart || bucket === "running" || isStarting;
-  const stopDisabled = !canStop || bucket === "stopped" || isStopping;
-  const deleteDisabled = !canDelete || isDeleting;
-
-  const startTitle = !canStart
-    ? "Requiere permiso vm.start"
-    : bucket === "running"
-      ? "La instancia ya está en ejecución"
-      : "Iniciar instancia";
-  const stopTitle = !canStop
-    ? "Requiere permiso vm.stop"
-    : bucket === "stopped"
-      ? "La instancia ya está detenida"
-      : "Detener instancia";
+  const startDisabled = !canStart || bucket === "running" || busyAction !== undefined;
+  const stopDisabled = !canStop || bucket === "stopped" || busyAction !== undefined;
+  const deleteDisabled = !canDelete || busyAction !== undefined;
+  const startTitle =
+    !canStart ? "Requiere permiso vm.start" : bucket === "running" ? "La instancia ya está en ejecución" : "Iniciar instancia";
+  const stopTitle =
+    !canStop ? "Requiere permiso vm.stop" : bucket === "stopped" ? "La instancia ya está detenida" : "Detener instancia";
   const deleteTitle = canDelete ? "Eliminar instancia" : "Requiere permiso vm.delete";
 
   return (
@@ -127,7 +112,7 @@ export function InstanceRow({
         </button>
         <button
           type="button"
-          onClick={() => onDeleteRequest(instance)}
+          onClick={() => onDelete(instance)}
           disabled={deleteDisabled}
           title={deleteTitle}
           aria-label={deleteTitle}
