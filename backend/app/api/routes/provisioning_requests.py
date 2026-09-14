@@ -356,7 +356,7 @@ def execute_provisioning_request(
     try:
         provisioning_request = get_provisioning_request(
             db,
-            request_id,
+            request_id=request_id,
         )
     except ProvisioningRequestNotFoundError as exc:
         raise HTTPException(
