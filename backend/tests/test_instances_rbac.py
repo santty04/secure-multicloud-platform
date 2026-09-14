@@ -1017,6 +1017,150 @@ def test_azure_stop_failure_is_recorded(
     assert failure_log.event_type == "operation_failure"
 
 
+def test_azure_delete_uses_cloud_service_when_writes_are_enabled(
+    client: TestClient,
+    administrator: User,
+    managed_resource: ManagedResource,
+    db_session: Session,
+    monkeypatch,
+):
+    called_with = None
+    called_role = None
+
+    def fake_delete_virtual_machine(
+        cloud_resource_id: str,
+        role_code: str,
+    ) -> None:
+        nonlocal called_with, called_role
+
+        called_with = cloud_resource_id
+        called_role = role_code
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.delete_virtual_machine",
+        fake_delete_virtual_machine,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.azure_write_enabled",
+        True,
+    )
+
+    response = client.delete(
+        f"/api/v1/instances/azure/{managed_resource.id}",
+        headers=authorization_header(administrator),
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["status"] == "success"
+    assert body["action"] == "delete"
+    assert body["provider"] == "azure"
+    assert called_with == managed_resource.cloud_resource_id
+    assert called_role == "administrator"
+
+    db_session.refresh(managed_resource)
+    assert managed_resource.is_managed is False
+    assert managed_resource.status == "terminated"
+
+    list_response = client.get(
+        "/api/v1/instances",
+        headers=authorization_header(administrator),
+    )
+
+    assert list_response.status_code == 200
+    assert all(
+        item["id"] != str(managed_resource.id)
+        for item in list_response.json()
+    )
+
+
+def test_azure_delete_failure_is_recorded(
+    client: TestClient,
+    administrator: User,
+    managed_resource: ManagedResource,
+    db_session: Session,
+    monkeypatch,
+):
+    def fake_delete_virtual_machine(
+        cloud_resource_id: str,
+        role_code: str,
+    ) -> None:
+        del cloud_resource_id, role_code
+
+        raise RuntimeError("Simulated Azure delete failure")
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.delete_virtual_machine",
+        fake_delete_virtual_machine,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.azure_write_enabled",
+        True,
+    )
+
+    response = client.delete(
+        f"/api/v1/instances/azure/{managed_resource.id}",
+        headers=authorization_header(administrator),
+    )
+
+    assert response.status_code == 502
+
+    correlation_id = uuid.UUID(response.headers["X-Correlation-ID"])
+
+    operation = db_session.scalar(
+        select(Operation).where(Operation.correlation_id == correlation_id)
+    )
+
+    assert operation is not None
+    assert operation.status == "failed"
+    assert operation.action == "delete"
+    assert operation.provider == "azure"
+    assert operation.error_code == "azure_delete_failed"
+    assert operation.error_message == "Simulated Azure delete failure"
+    assert operation.completed_at is not None
+
+    db_session.refresh(managed_resource)
+    assert managed_resource.is_managed is True
+
+
+# ============================================================
+# AZURE CREATE LIMIT TESTS
+# ============================================================
+
+
+def test_azure_create_is_blocked_when_managed_vm_limit_is_reached(
+    client: TestClient,
+    administrator: User,
+    managed_resource: ManagedResource,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.azure_max_managed_vms",
+        1,
+    )
+
+    response = client.post(
+        "/api/v1/instances/azure",
+        json={
+            "name": "azure-limit-test",
+        },
+        headers=authorization_header(administrator),
+    )
+
+    assert_error_response(
+        response,
+        expected_status=409,
+        expected_message=(
+            "Azure managed virtual machine limit reached. "
+            "Maximum allowed: 1."
+        ),
+    )
+
+
 # ============================================================
 # AWS START TESTS
 # ============================================================
@@ -1490,6 +1634,8 @@ def test_aws_delete_remains_simulated_when_writes_are_disabled(
     assert body["requested_by"] == str(administrator.id)
 
     assert called is False
+    db_session.refresh(resource)
+    assert resource.is_managed is True
 
 
 def test_aws_delete_uses_cloud_service_when_writes_are_enabled(
@@ -1552,6 +1698,21 @@ def test_aws_delete_uses_cloud_service_when_writes_are_enabled(
 
     assert called_instance_id == resource.cloud_resource_id
     assert called_role == "administrator"
+
+    db_session.refresh(resource)
+    assert resource.is_managed is False
+    assert resource.status == "terminated"
+
+    list_response = client.get(
+        "/api/v1/instances",
+        headers=authorization_header(administrator),
+    )
+
+    assert list_response.status_code == 200
+    assert all(
+        item["id"] != str(resource.id)
+        for item in list_response.json()
+    )
 
 
 def test_aws_delete_failure_is_recorded(

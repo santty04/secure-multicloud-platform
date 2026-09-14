@@ -12,7 +12,7 @@ const KNOWN_INSTANCE_STATUS: Record<string, { label: string; tone: StatusTone }>
   stopping: { label: "Deteniendo", tone: "warning" },
   "shutting-down": { label: "Apagando", tone: "warning" },
   starting: { label: "Iniciando", tone: "warning" },
-  pending: { label: "En transición", tone: "warning" },
+  pending: { label: "Pendiente", tone: "warning" },
   terminated: { label: "Eliminada", tone: "danger" },
   deleting: { label: "Eliminando", tone: "danger" },
   unknown: { label: "Desconocido", tone: "neutral" },
@@ -24,10 +24,11 @@ export function instanceStatusPresentation(status: string): { label: string; ton
   return { label: status.charAt(0).toUpperCase() + status.slice(1), tone: "neutral" };
 }
 
-export function instanceStatusFilterValue(status: string): "running" | "stopped" | "other" {
+export function instanceStatusFilterValue(status: string): "running" | "stopped" | "pending" | "other" {
   const s = status.toLowerCase();
   if (s === "running") return "running";
   if (s === "stopped") return "stopped";
+  if (s === "pending") return "pending";
   return "other";
 }
 

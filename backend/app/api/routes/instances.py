@@ -2,7 +2,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.dependencies import (
@@ -30,6 +30,7 @@ from app.cloud.aws.ec2 import (
 from app.cloud.aws.errors import AWSCloudError
 from app.cloud.azure.compute import (
     create_virtual_machine,
+    delete_virtual_machine,
     get_virtual_machine_power_state,
     start_virtual_machine,
     stop_virtual_machine,
@@ -166,6 +167,11 @@ def register_azure_managed_resource(
     db.flush()
 
     return resource
+
+
+def mark_resource_deleted(resource: ManagedResource) -> None:
+    resource.is_managed = False
+    resource.status = "terminated"
 
 
 # ============================================================
@@ -519,6 +525,24 @@ def execute_azure_create_action(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="An Azure virtual machine with this name is already managed.",
+        )
+
+    managed_azure_vm_count = db.scalar(
+    select(func.count())
+    .select_from(ManagedResource)
+    .where(
+        ManagedResource.provider == CloudProvider.AZURE.value,
+        ManagedResource.is_managed.is_(True),
+    )
+)
+
+    if managed_azure_vm_count >= settings.azure_max_managed_vms:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Azure managed virtual machine limit reached. "
+                f"Maximum allowed: {settings.azure_max_managed_vms}."
+            ),
         )
 
     operation = create_operation(
@@ -1208,6 +1232,119 @@ def execute_aws_stop_action(
 
 
 # ============================================================
+# AZURE DELETE
+# ============================================================
+
+
+def execute_azure_delete_action(
+    *,
+    request: Request,
+    db: DatabaseSession,
+    resource: ManagedResource,
+    current_user: User,
+) -> InstanceActionResponse:
+    correlation_id = uuid.UUID(
+        request.state.correlation_id,
+    )
+
+    operation = create_operation(
+        db,
+        correlation_id=correlation_id,
+        user_id=current_user.id,
+        resource_id=resource.id,
+        provider=CloudProvider.AZURE.value,
+        action="delete",
+        required_permission="vm.delete",
+    )
+
+    create_audit_log(
+        db,
+        correlation_id=correlation_id,
+        operation_id=operation.id,
+        user_id=current_user.id,
+        resource_id=resource.id,
+        provider=CloudProvider.AZURE.value,
+        action="delete",
+        decision="allowed",
+        reason_code="permission_granted",
+        required_permission="vm.delete",
+        role_code=current_user.role.code,
+        event_type="operation",
+        http_method=request.method,
+        request_path=request.url.path,
+        details={
+            "execution_mode": "azure",
+        },
+    )
+
+    try:
+        delete_virtual_machine(
+            resource.cloud_resource_id,
+            current_user.role.code,
+        )
+
+        mark_operation_success(
+            db,
+            operation=operation,
+            result_summary={
+                "execution_mode": "azure",
+                "resource_name": resource.name,
+            },
+        )
+        mark_resource_deleted(resource)
+
+        db.commit()
+
+    except Exception as exc:
+        mark_operation_failed(
+            db,
+            operation=operation,
+            error_code="azure_delete_failed",
+            error_message=str(exc),
+            result_summary={
+                "execution_mode": "azure",
+                "resource_name": resource.name,
+            },
+        )
+
+        create_audit_log(
+            db,
+            correlation_id=correlation_id,
+            operation_id=operation.id,
+            user_id=current_user.id,
+            resource_id=resource.id,
+            provider=CloudProvider.AZURE.value,
+            action="delete",
+            decision="allowed",
+            reason_code="cloud_operation_failed",
+            required_permission="vm.delete",
+            role_code=current_user.role.code,
+            event_type="operation_failure",
+            http_method=request.method,
+            request_path=request.url.path,
+            details={
+                "execution_mode": "azure",
+                "error_type": type(exc).__name__,
+            },
+        )
+
+        db.commit()
+
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Azure virtual machine delete operation failed.",
+        ) from exc
+
+    return InstanceActionResponse(
+        resource_id=resource.id,
+        provider=CloudProvider.AZURE,
+        action="delete",
+        status="success",
+        requested_by=current_user.id,
+    )
+
+
+# ============================================================
 # AWS DELETE
 # ============================================================
 
@@ -1267,6 +1404,7 @@ def execute_aws_delete_action(
                 "resource_name": resource.name,
             },
         )
+        mark_resource_deleted(resource)
 
         db.commit()
 
@@ -1617,6 +1755,17 @@ def delete_instance(
         provider,
         resource_id,
     )
+
+    if (
+        provider is CloudProvider.AZURE
+        and settings.azure_write_enabled
+    ):
+        return execute_azure_delete_action(
+            request=request,
+            db=db,
+            resource=resource,
+            current_user=current_user,
+        )
 
     if (
         provider is CloudProvider.AWS

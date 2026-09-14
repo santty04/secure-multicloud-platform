@@ -163,6 +163,26 @@ def stop_virtual_machine(
     poller.result()
 
 
+def delete_virtual_machine(
+    cloud_resource_id: str,
+    role_code: str,
+) -> None:
+    resource_group_name, vm_name = (
+        parse_virtual_machine_resource_id(
+            cloud_resource_id
+        )
+    )
+
+    client = get_azure_compute_client(role_code)
+
+    poller = client.virtual_machines.begin_delete(
+        resource_group_name=resource_group_name,
+        vm_name=vm_name,
+    )
+
+    poller.result()
+
+
 def create_virtual_machine(
     *,
     name: str,
