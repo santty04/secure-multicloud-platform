@@ -87,7 +87,7 @@ class Settings(BaseSettings):
     ollama_model: str = "qwen3:4b-instruct"
     ollama_timeout_seconds: int = 120
 
-    ai_advisor_max_instances: int = 5
+    ai_advisor_max_instances: int = 1
     ai_advisor_min_disk_size_gb: int = 8
     ai_advisor_max_disk_size_gb: int = 50
     model_config = SettingsConfigDict(

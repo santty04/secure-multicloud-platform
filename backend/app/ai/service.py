@@ -68,6 +68,11 @@ def validate_recommendation_policy(
     recommendation: InfrastructureRecommendation,
     request: InfrastructureAdvisorRequest,
 ) -> None:
+    if recommendation.environment != "dev":
+        raise AIPolicyViolationError(
+            "AI infrastructure provisioning currently supports only dev."
+        )
+
     catalog = get_infrastructure_catalog()
 
     provider_config = catalog.get(

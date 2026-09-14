@@ -32,7 +32,10 @@ INFRASTRUCTURE_CATALOG: dict[str, dict[str, Any]] = {
         ],
         "public_ip_allowed": False,
         "max_instances": settings.ai_advisor_max_instances,
-        "min_disk_size_gb": settings.ai_advisor_min_disk_size_gb,
+        "min_disk_size_gb": max(
+            30,
+            settings.ai_advisor_min_disk_size_gb,
+        ),
         "max_disk_size_gb": settings.ai_advisor_max_disk_size_gb,
     },
 }
