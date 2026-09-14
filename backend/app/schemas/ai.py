@@ -1,7 +1,10 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
 class InfrastructureAdvisorRequest(BaseModel):
+    ai_provider: Literal["ollama", "gemini"] = "ollama"
     request: str = Field(
         min_length=10,
         max_length=4000,

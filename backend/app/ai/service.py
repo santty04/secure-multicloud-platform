@@ -3,7 +3,6 @@ import json
 from app.ai.catalog import get_infrastructure_catalog
 from app.ai.errors import AIPolicyViolationError
 from app.ai.factory import get_ai_provider
-from app.core.config import settings
 from app.schemas.ai import (
     InfrastructureAdvisorRequest,
     InfrastructureAdvisorResponse,
@@ -134,7 +133,7 @@ def validate_recommendation_policy(
 async def generate_infrastructure_recommendation(
     request: InfrastructureAdvisorRequest,
 ) -> InfrastructureAdvisorResponse:
-    provider = get_ai_provider()
+    provider = get_ai_provider(request.ai_provider)
 
     recommendation = await provider.generate_structured(
         system_prompt=SYSTEM_PROMPT,
@@ -151,7 +150,7 @@ async def generate_infrastructure_recommendation(
         recommendation=recommendation,
         estimated_monthly_cost_usd=None,
         pricing_status="not_configured",
-        ai_provider=settings.ai_provider,
-        ai_model=settings.ollama_model,
+        ai_provider=request.ai_provider,
+        ai_model=provider.model,
         executable=False,
     )
