@@ -34,6 +34,8 @@ SECURITY RULES:
     minimum necessary resources.
 11. Return only the structured response required by the supplied
     JSON schema.
+12. The "reason" field must always be written entirely in Spanish,
+    regardless of the language used in the user's request.
 """
 
 
