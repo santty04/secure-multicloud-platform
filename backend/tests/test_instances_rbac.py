@@ -1128,6 +1128,40 @@ def test_azure_delete_failure_is_recorded(
 
 
 # ============================================================
+# AZURE CREATE LIMIT TESTS
+# ============================================================
+
+
+def test_azure_create_is_blocked_when_managed_vm_limit_is_reached(
+    client: TestClient,
+    administrator: User,
+    managed_resource: ManagedResource,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.azure_max_managed_vms",
+        1,
+    )
+
+    response = client.post(
+        "/api/v1/instances/azure",
+        json={
+            "name": "azure-limit-test",
+        },
+        headers=authorization_header(administrator),
+    )
+
+    assert_error_response(
+        response,
+        expected_status=409,
+        expected_message=(
+            "Azure managed virtual machine limit reached. "
+            "Maximum allowed: 1."
+        ),
+    )
+
+
+# ============================================================
 # AWS START TESTS
 # ============================================================
 

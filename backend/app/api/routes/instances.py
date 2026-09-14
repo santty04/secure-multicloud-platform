@@ -2,7 +2,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.dependencies import (
@@ -525,6 +525,24 @@ def execute_azure_create_action(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="An Azure virtual machine with this name is already managed.",
+        )
+
+    managed_azure_vm_count = db.scalar(
+    select(func.count())
+    .select_from(ManagedResource)
+    .where(
+        ManagedResource.provider == CloudProvider.AZURE.value,
+        ManagedResource.is_managed.is_(True),
+    )
+)
+
+    if managed_azure_vm_count >= settings.azure_max_managed_vms:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Azure managed virtual machine limit reached. "
+                f"Maximum allowed: {settings.azure_max_managed_vms}."
+            ),
         )
 
     operation = create_operation(

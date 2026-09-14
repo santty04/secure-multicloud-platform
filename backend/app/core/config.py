@@ -53,6 +53,8 @@ class Settings(BaseSettings):
     azure_default_admin_username: str = "azureadmin"
     azure_default_ssh_public_key: str | None = None
 
+    azure_max_managed_vms: int = 2
+
     # ============================================================
     # AWS
     # ============================================================
