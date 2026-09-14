@@ -191,6 +191,9 @@ def create_virtual_machine(
     admin_username: str = "azureadmin",
     size: str | None = None,
     location: str | None = None,
+    os_disk_size_gb: int | None = None,
+    disk_type: str = "Standard_LRS",
+    environment: str = "dev",
 ) -> str:
     if not settings.azure_resource_group:
         raise RuntimeError(
@@ -247,7 +250,7 @@ def create_virtual_machine(
         },
         "tags": {
             "project": "secure-multicloud",
-            "environment": "dev",
+            "environment": environment,
             "managed_by": (
                 "secure-multicloud-platform"
             ),
@@ -291,9 +294,7 @@ def create_virtual_machine(
                     "createOption": "FromImage",
                     "deleteOption": "Delete",
                     "managedDisk": {
-                        "storageAccountType": (
-                            "Standard_LRS"
-                        ),
+                        "storageAccountType": disk_type,
                     },
                 },
             },
@@ -328,12 +329,17 @@ def create_virtual_machine(
         },
         "tags": {
             "project": "secure-multicloud",
-            "environment": "dev",
+            "environment": environment,
             "managed_by": (
                 "secure-multicloud-platform"
             ),
         },
     }
+
+    if os_disk_size_gb is not None:
+        vm_parameters["properties"]["storageProfile"]["osDisk"][
+            "diskSizeGB"
+        ] = os_disk_size_gb
 
     try:
         vm_poller = (

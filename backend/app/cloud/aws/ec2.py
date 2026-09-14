@@ -126,12 +126,18 @@ def create_instance(
     name: str,
     role_code: str,
     client_token: str,
+    instance_type: str | None = None,
+    region: str | None = None,
+    root_volume_size_gb: int | None = None,
+    volume_type: str | None = None,
+    environment: str = "dev",
 ) -> str:
     """
     Create a securely configured AWS EC2 instance.
 
-    Security-sensitive infrastructure parameters are controlled
-    by backend configuration rather than supplied by the user.
+    Security-sensitive networking and image parameters remain controlled
+    by backend configuration. Approved provisioning requests may override
+    the compute size, region, root disk size, and disk type.
 
     Returns the created EC2 instance ID.
     """
@@ -153,18 +159,27 @@ def create_instance(
             message="AWS security group configuration is unavailable.",
         )
 
+    effective_region = region or settings.aws_region
+    effective_instance_type = (
+        instance_type or settings.aws_instance_type
+    )
+    effective_root_volume_size_gb = (
+        root_volume_size_gb or settings.aws_root_volume_size_gb
+    )
+    effective_volume_type = volume_type or "gp3"
+
     try:
         session = assume_role_session(role_code)
 
         ec2_client = session.client(
             "ec2",
-            region_name=settings.aws_region,
+            region_name=effective_region,
         )
 
         response = ec2_client.run_instances(
             ClientToken=client_token,
             ImageId=settings.aws_ami_id,
-            InstanceType=settings.aws_instance_type,
+            InstanceType=effective_instance_type,
             MinCount=1,
             MaxCount=1,
             NetworkInterfaces=[
@@ -186,8 +201,8 @@ def create_instance(
                 {
                     "DeviceName": "/dev/sda1",
                     "Ebs": {
-                        "VolumeSize": settings.aws_root_volume_size_gb,
-                        "VolumeType": "gp3",
+                        "VolumeSize": effective_root_volume_size_gb,
+                        "VolumeType": effective_volume_type,
                         "Encrypted": True,
                         "DeleteOnTermination": True,
                     },
@@ -207,7 +222,7 @@ def create_instance(
                         },
                         {
                             "Key": "environment",
-                            "Value": "dev",
+                            "Value": environment,
                         },
                         {
                             "Key": "managed_by",
@@ -224,7 +239,7 @@ def create_instance(
                         },
                         {
                             "Key": "environment",
-                            "Value": "dev",
+                            "Value": environment,
                         },
                         {
                             "Key": "managed_by",
