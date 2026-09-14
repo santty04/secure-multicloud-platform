@@ -37,7 +37,7 @@ resource "azurerm_container_app" "backend" {
 
     container {
       name   = "backend"
-      image  = "${azurerm_container_registry.backend.login_server}/smp-backend:0.1.3"
+      image  = "${azurerm_container_registry.backend.login_server}/smp-backend:0.1.4"
       cpu    = 0.25
       memory = "0.5Gi"
 
@@ -137,6 +137,16 @@ resource "azurerm_container_app" "backend" {
       env {
         name  = "AZURE_DEFAULT_LOCATION"
         value = "centralus"
+      }
+
+      env {
+        name  = "AZURE_DEFAULT_ADMIN_USERNAME"
+        value = "azureadmin"
+      }
+
+      env {
+        name  = "AZURE_DEFAULT_SSH_PUBLIC_KEY"
+        value = trimspace(file("${path.module}/keys/secure-multicloud-azure.pub"))
       }
 
       # Administrative kill switches.
