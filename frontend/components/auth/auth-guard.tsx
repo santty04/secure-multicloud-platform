@@ -7,6 +7,7 @@ import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCurrentUser, useHasAccessToken } from "@/features/auth/hooks";
+import { isApiError } from "@/lib/api/errors";
 import { session } from "@/lib/auth/session";
 
 const mocksEnabled = process.env.NEXT_PUBLIC_ENABLE_MOCKS === "true";
@@ -41,15 +42,19 @@ function ShellSkeleton() {
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const hasToken = useHasAccessToken();
-  const { data: user, isPending, isError } = useCurrentUser({ enabled: hasToken === true });
+  const { data: user, isPending, isError, error } = useCurrentUser({ enabled: hasToken === true });
+  const isUnauthenticated = isError && isApiError(error) && error.status === 401;
 
   useEffect(() => {
     if (hasToken === false) router.replace("/login");
   }, [hasToken, router]);
 
   useEffect(() => {
-    if (isError) router.replace("/login");
-  }, [isError, router]);
+    // Only a real 401 means the session is invalid. Network hiccups, 5xx, or a
+    // cold-starting backend must not bounce the user to /login — session.expire()
+    // (triggered by apiFetch on 401) already handles the real case via `hasToken`.
+    if (isUnauthenticated) router.replace("/login");
+  }, [isUnauthenticated, router]);
 
   useEffect(() => {
     return session.onExpire(() => {
@@ -58,7 +63,22 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   if (hasToken !== true || isPending) return <ShellSkeleton />;
-  if (isError || !user) return null;
+  if (isUnauthenticated) return null;
+
+  if (isError) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-smp-bg px-6">
+        <div className="flex max-w-[420px] flex-col items-center gap-3 text-center">
+          <AlertTriangle className="size-8 text-smp-warning" strokeWidth={1.8} aria-hidden="true" />
+          <p className="text-[14.5px] text-smp-ink-muted">
+            {isApiError(error) ? error.message : "No se pudo conectar con la plataforma. Inténtalo de nuevo."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) return null;
 
   return (
     <div className="flex min-h-screen bg-smp-bg">
