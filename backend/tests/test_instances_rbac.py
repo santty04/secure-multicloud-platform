@@ -1578,7 +1578,7 @@ def test_aws_stop_failure_is_recorded(
 # ============================================================
 
 
-def test_aws_delete_remains_simulated_when_writes_are_disabled(
+def test_aws_delete_marks_resource_unmanaged_when_writes_are_disabled(
     client: TestClient,
     administrator: User,
     db_session: Session,
@@ -1635,7 +1635,8 @@ def test_aws_delete_remains_simulated_when_writes_are_disabled(
 
     assert called is False
     db_session.refresh(resource)
-    assert resource.is_managed is True
+    assert resource.is_managed is False
+    assert resource.status == "terminated"
 
 
 def test_aws_delete_uses_cloud_service_when_writes_are_enabled(

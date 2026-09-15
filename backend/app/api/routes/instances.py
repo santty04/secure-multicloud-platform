@@ -232,6 +232,9 @@ def execute_simulated_action(
         },
     )
 
+    if action == "delete":
+        mark_resource_deleted(resource)
+
     db.commit()
 
     return InstanceActionResponse(
