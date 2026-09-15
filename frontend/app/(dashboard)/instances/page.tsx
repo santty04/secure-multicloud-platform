@@ -162,7 +162,7 @@ export default function InstancesPage() {
             title: result.status === "simulated" ? "Eliminación simulada" : "Eliminación en proceso",
             message:
               result.status === "simulated"
-                ? "La acción quedó registrada, pero la instancia seguirá apareciendo porque no se modificaron recursos reales."
+                ? "La acción quedó registrada, pero no se modificaron recursos reales. La instancia se retiró del listado de administrados."
                 : "La instancia está procesando la eliminación.",
           });
         },
