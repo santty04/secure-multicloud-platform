@@ -731,6 +731,7 @@ def test_azure_start_remains_simulated_when_writes_are_disabled(
     client: TestClient,
     operator: User,
     managed_resource: ManagedResource,
+    db_session: Session,
     monkeypatch,
 ):
     called = False
@@ -764,11 +765,15 @@ def test_azure_start_remains_simulated_when_writes_are_disabled(
     assert response.json()["status"] == "simulated"
     assert called is False
 
+    db_session.refresh(managed_resource)
+    assert managed_resource.status == "running"
+
 
 def test_azure_start_uses_cloud_service_when_writes_are_enabled(
     client: TestClient,
     operator: User,
     managed_resource: ManagedResource,
+    db_session: Session,
     monkeypatch,
 ):
     called_with = None
@@ -807,6 +812,9 @@ def test_azure_start_uses_cloud_service_when_writes_are_enabled(
     assert body["provider"] == "azure"
     assert called_with == managed_resource.cloud_resource_id
     assert called_role == "operator"
+
+    db_session.refresh(managed_resource)
+    assert managed_resource.status == "running"
 
 
 def test_azure_start_failure_is_recorded(
@@ -876,6 +884,7 @@ def test_azure_stop_remains_simulated_when_writes_are_disabled(
     client: TestClient,
     operator: User,
     managed_resource: ManagedResource,
+    db_session: Session,
     monkeypatch,
 ):
     called = False
@@ -909,11 +918,15 @@ def test_azure_stop_remains_simulated_when_writes_are_disabled(
     assert response.json()["status"] == "simulated"
     assert called is False
 
+    db_session.refresh(managed_resource)
+    assert managed_resource.status == "stopped"
+
 
 def test_azure_stop_uses_cloud_service_when_writes_are_enabled(
     client: TestClient,
     operator: User,
     managed_resource: ManagedResource,
+    db_session: Session,
     monkeypatch,
 ):
     called_with = None
@@ -952,6 +965,9 @@ def test_azure_stop_uses_cloud_service_when_writes_are_enabled(
     assert body["provider"] == "azure"
     assert called_with == managed_resource.cloud_resource_id
     assert called_role == "operator"
+
+    db_session.refresh(managed_resource)
+    assert managed_resource.status == "stopped"
 
 
 def test_azure_stop_failure_is_recorded(
@@ -1218,6 +1234,9 @@ def test_aws_start_remains_simulated_when_writes_are_disabled(
 
     assert called is False
 
+    db_session.refresh(resource)
+    assert resource.status == "running"
+
 
 def test_aws_start_uses_cloud_service_when_writes_are_enabled(
     client: TestClient,
@@ -1279,6 +1298,9 @@ def test_aws_start_uses_cloud_service_when_writes_are_enabled(
 
     assert called_instance_id == resource.cloud_resource_id
     assert called_role == "operator"
+
+    db_session.refresh(resource)
+    assert resource.status == "running"
 
 
 def test_aws_start_failure_is_recorded(
@@ -1425,6 +1447,9 @@ def test_aws_stop_remains_simulated_when_writes_are_disabled(
 
     assert called is False
 
+    db_session.refresh(resource)
+    assert resource.status == "stopped"
+
 
 def test_aws_stop_uses_cloud_service_when_writes_are_enabled(
     client: TestClient,
@@ -1486,6 +1511,9 @@ def test_aws_stop_uses_cloud_service_when_writes_are_enabled(
 
     assert called_instance_id == resource.cloud_resource_id
     assert called_role == "operator"
+
+    db_session.refresh(resource)
+    assert resource.status == "stopped"
 
 
 def test_aws_stop_failure_is_recorded(
@@ -1699,6 +1727,74 @@ def test_aws_delete_uses_cloud_service_when_writes_are_enabled(
 
     assert called_instance_id == resource.cloud_resource_id
     assert called_role == "administrator"
+
+    db_session.refresh(resource)
+    assert resource.is_managed is False
+    assert resource.status == "terminated"
+
+    list_response = client.get(
+        "/api/v1/instances",
+        headers=authorization_header(administrator),
+    )
+
+    assert list_response.status_code == 200
+    assert all(
+        item["id"] != str(resource.id)
+        for item in list_response.json()
+    )
+
+
+def test_aws_delete_treats_instance_not_found_as_success(
+    client: TestClient,
+    administrator: User,
+    db_session: Session,
+    monkeypatch,
+):
+    resource = ManagedResource(
+        provider="aws",
+        cloud_resource_id="i-test000000000099",
+        name="test-aws-delete-already-gone",
+        resource_type="virtual_machine",
+        region="us-east-2",
+        environment="test",
+        status="stopped",
+        is_managed=True,
+    )
+
+    db_session.add(resource)
+    db_session.flush()
+
+    def fake_terminate_aws_instance(
+        instance_id: str,
+        role_code: str,
+    ) -> None:
+        del instance_id, role_code
+
+        raise AWSCloudError(
+            code="aws_instance_not_found",
+            message="AWS EC2 instance was not found.",
+        )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.terminate_aws_instance",
+        fake_terminate_aws_instance,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.aws_write_enabled",
+        True,
+    )
+
+    response = client.delete(
+        f"/api/v1/instances/aws/{resource.id}",
+        headers=authorization_header(administrator),
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["status"] == "success"
 
     db_session.refresh(resource)
     assert resource.is_managed is False
