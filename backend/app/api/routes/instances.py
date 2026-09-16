@@ -234,6 +234,10 @@ def execute_simulated_action(
 
     if action == "delete":
         mark_resource_deleted(resource)
+    elif action == "start":
+        resource.status = "running"
+    elif action == "stop":
+        resource.status = "stopped"
 
     db.commit()
 
@@ -867,6 +871,7 @@ def execute_azure_start_action(
                 "resource_name": resource.name,
             },
         )
+        resource.status = "running"
 
         db.commit()
 
@@ -981,6 +986,7 @@ def execute_aws_start_action(
                 "resource_name": resource.name,
             },
         )
+        resource.status = "running"
 
         db.commit()
 
@@ -1094,6 +1100,7 @@ def execute_azure_stop_action(
                 "resource_name": resource.name,
             },
         )
+        resource.status = "stopped"
 
         db.commit()
 
@@ -1208,6 +1215,7 @@ def execute_aws_stop_action(
                 "resource_name": resource.name,
             },
         )
+        resource.status = "stopped"
 
         db.commit()
 
@@ -1421,10 +1429,18 @@ def execute_aws_delete_action(
     )
 
     try:
-        terminate_aws_instance(
-            resource.cloud_resource_id,
-            current_user.role.code,
-        )
+        try:
+            terminate_aws_instance(
+                resource.cloud_resource_id,
+                current_user.role.code,
+            )
+        except AWSCloudError as exc:
+            if exc.code != "aws_instance_not_found":
+                raise
+            # The instance is already gone from AWS (e.g. deleted outside the
+            # platform, or a stale record from before write mode was enabled).
+            # Deleting it here just needs to reach the same end state, so
+            # treat "not found" as a successful delete instead of failing.
 
         mark_operation_success(
             db,
