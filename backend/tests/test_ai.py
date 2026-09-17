@@ -17,6 +17,8 @@ from app.schemas.ai import (
 
 
 class FakeProvider:
+    model = "test-model"
+
     def __init__(
         self,
         recommendation: InfrastructureRecommendation,
@@ -239,7 +241,7 @@ def test_administrator_can_request_ai_recommendation(
     monkeypatch.setattr(
         ai_service,
         "get_ai_provider",
-        lambda: provider,
+        lambda ai_provider: provider,
     )
 
     response = client.post(
@@ -298,7 +300,7 @@ def test_advisor_rejects_resource_outside_catalog(
     monkeypatch.setattr(
         ai_service,
         "get_ai_provider",
-        lambda: provider,
+        lambda ai_provider: provider,
     )
 
     response = client.post(
