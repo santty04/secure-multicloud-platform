@@ -166,3 +166,23 @@ output "container_app_environment_static_ip" {
   description = "IP de infraestructura del Azure Container Apps Environment"
   value       = azurerm_container_app_environment.backend.static_ip_address
 }
+
+output "managed_resource_group_name" {
+  description = "Resource Group destinado a recursos administrados por Secure Multicloud"
+  value       = azurerm_resource_group.managed.name
+}
+
+output "managed_virtual_network_name" {
+  description = "Nombre de la VNet destinada a recursos administrados"
+  value       = azurerm_virtual_network.managed.name
+}
+
+output "managed_subnet_id" {
+  description = "Resource ID de la subnet destinada a maquinas virtuales administradas"
+  value       = azurerm_subnet.managed_vm.id
+}
+
+output "managed_network_security_group_name" {
+  description = "Nombre del NSG de las maquinas virtuales administradas"
+  value       = azurerm_network_security_group.managed_vm.name
+}

@@ -44,6 +44,15 @@ def list_instances(
                     "Name": "tag:environment",
                     "Values": ["dev"],
                 },
+                {
+                    "Name": "instance-state-name",
+                    "Values": [
+                        "pending",
+                        "running",
+                        "stopping",
+                        "stopped",
+                    ],
+                },
             ]
         )
 
@@ -118,6 +127,50 @@ def get_instance_state(
         return None
 
     except (BotoCoreError, ClientError) as exc:
+        raise_safe_aws_error(exc)
+
+
+def get_instance_state_by_id(
+    instance_id: str,
+    role_code: str,
+) -> str | None:
+    """
+    Return the current EC2 state for an exact instance ID.
+
+    This lookup intentionally does not filter by project tags.
+    It is used to distinguish an instance that no longer exists
+    from an existing instance that is outside the managed tag scope.
+
+    Returns None only when AWS reports that the instance does not exist.
+    """
+    try:
+        session = assume_role_session(role_code)
+
+        ec2_client = session.client(
+            "ec2",
+            region_name=settings.aws_region,
+        )
+
+        response = ec2_client.describe_instances(
+            InstanceIds=[instance_id],
+        )
+
+        for reservation in response.get("Reservations", []):
+            for instance in reservation.get("Instances", []):
+                if instance.get("InstanceId") == instance_id:
+                    return instance.get("State", {}).get("Name")
+
+        return None
+
+    except ClientError as exc:
+        error_code = exc.response.get("Error", {}).get("Code")
+
+        if error_code == "InvalidInstanceID.NotFound":
+            return None
+
+        raise_safe_aws_error(exc)
+
+    except BotoCoreError as exc:
         raise_safe_aws_error(exc)
 
 

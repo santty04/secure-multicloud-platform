@@ -16,6 +16,9 @@ from app.cloud.aws.ec2 import (
     get_instance_state as get_aws_instance_state,
 )
 from app.cloud.aws.ec2 import (
+    get_instance_state_by_id as get_aws_instance_state_by_id,
+)
+from app.cloud.aws.ec2 import (
     list_instances as list_aws_instances,
 )
 from app.cloud.aws.ec2 import (
@@ -1429,18 +1432,28 @@ def execute_aws_delete_action(
     )
 
     try:
-        try:
-            terminate_aws_instance(
-                resource.cloud_resource_id,
-                current_user.role.code,
-            )
-        except AWSCloudError as exc:
-            if exc.code != "aws_instance_not_found":
-                raise
-            # The instance is already gone from AWS (e.g. deleted outside the
-            # platform, or a stale record from before write mode was enabled).
-            # Deleting it here just needs to reach the same end state, so
-            # treat "not found" as a successful delete instead of failing.
+        instance_state = get_aws_instance_state_by_id(
+            resource.cloud_resource_id,
+            current_user.role.code,
+        )
+
+        if instance_state not in {
+            None,
+            "shutting-down",
+            "terminated",
+        }:
+            try:
+                terminate_aws_instance(
+                    resource.cloud_resource_id,
+                    current_user.role.code,
+                )
+            except AWSCloudError as exc:
+                if exc.code != "aws_instance_not_found":
+                    raise
+                # The instance is already gone from AWS (e.g. deleted outside
+                # the platform, or a stale record from before write mode was
+                # enabled). Deleting it here just needs to reach the same end
+                # state, so treat "not found" as a successful delete.
 
         mark_operation_success(
             db,

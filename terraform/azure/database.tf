@@ -44,7 +44,7 @@ resource "azurerm_postgresql_flexible_server" "backend" {
 
   public_network_access_enabled = false
 
-  sku_name     = "B_Standard_B2s"
+  sku_name     = "B_Standard_B1ms"
   storage_mb   = 32768
   storage_tier = "P4"
 
