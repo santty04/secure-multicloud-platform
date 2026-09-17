@@ -264,6 +264,10 @@ def execute_aws_create_action(
     db: DatabaseSession,
     payload: AWSInstanceCreateRequest,
     current_user: User,
+    instance_type: str | None = None,
+    region: str | None = None,
+    disk_type: str | None = None,
+    disk_size_gb: int | None = None,
 ) -> AWSInstanceCreateResponse:
     correlation_id = uuid.UUID(
         request.state.correlation_id,
@@ -322,10 +326,26 @@ def execute_aws_create_action(
     db.commit()
 
     try:
+        create_kwargs: dict[str, str | int] = {
+            "name": payload.name,
+            "role_code": current_user.role.code,
+            "client_token": str(correlation_id),
+        }
+
+        if instance_type is not None:
+            create_kwargs["instance_type"] = instance_type
+
+        if region is not None:
+            create_kwargs["region"] = region
+
+        if disk_type is not None:
+            create_kwargs["volume_type"] = disk_type
+
+        if disk_size_gb is not None:
+            create_kwargs["root_volume_size_gb"] = disk_size_gb
+
         instance_id = create_aws_instance(
-            name=payload.name,
-            role_code=current_user.role.code,
-            client_token=str(correlation_id),
+            **create_kwargs,
         )
 
     except AWSCloudError as exc:
@@ -518,6 +538,10 @@ def execute_azure_create_action(
     db: DatabaseSession,
     payload: AzureInstanceCreateRequest,
     current_user: User,
+    size: str | None = None,
+    location: str | None = None,
+    disk_type: str | None = None,
+    disk_size_gb: int | None = None,
 ) -> AzureInstanceCreateResponse:
     correlation_id = uuid.UUID(
         request.state.correlation_id,
@@ -628,7 +652,7 @@ def execute_azure_create_action(
             detail="Azure VM creation is not configured.",
         )
 
-    location = settings.azure_default_location
+    effective_location = location or settings.azure_default_location
 
     try:
         cloud_resource_id = create_virtual_machine(
@@ -636,8 +660,11 @@ def execute_azure_create_action(
             role_code=current_user.role.code,
             ssh_public_key=settings.azure_default_ssh_public_key,
             admin_username=settings.azure_default_admin_username,
-            size=settings.azure_default_vm_size,
-            location=location,
+            size=size or settings.azure_default_vm_size,
+            location=effective_location,
+            os_disk_size_gb=disk_size_gb,
+            disk_type=disk_type or "Standard_LRS",
+            environment="dev",
         )
 
     except Exception as exc:
@@ -689,7 +716,7 @@ def execute_azure_create_action(
             db=db,
             cloud_resource_id=cloud_resource_id,
             name=payload.name,
-            location=location,
+            location=effective_location,
             current_user=current_user,
         )
 
@@ -1423,6 +1450,10 @@ def execute_aws_delete_action(
             except AWSCloudError as exc:
                 if exc.code != "aws_instance_not_found":
                     raise
+                # The instance is already gone from AWS (e.g. deleted outside
+                # the platform, or a stale record from before write mode was
+                # enabled). Deleting it here just needs to reach the same end
+                # state, so treat "not found" as a successful delete.
 
         mark_operation_success(
             db,

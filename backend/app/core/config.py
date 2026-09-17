@@ -80,6 +80,18 @@ class Settings(BaseSettings):
     aws_federation_audience: str | None = None
     azure_managed_identity_client_id: str | None = None
 
+    # AI Infrastructure Advisor
+    ai_provider: str = "ollama"
+
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    ollama_model: str = "qwen3:4b-instruct"
+    ollama_timeout_seconds: int = 120
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-3.8-flash"
+
+    ai_advisor_max_instances: int = 1
+    ai_advisor_min_disk_size_gb: int = 8
+    ai_advisor_max_disk_size_gb: int = 50
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
