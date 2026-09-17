@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { createQueryClient } from "@/lib/query-client";
+import { session } from "@/lib/auth/session";
 import { Toaster } from "@/components/ui/sonner";
 
 const mocksEnabled = process.env.NEXT_PUBLIC_ENABLE_MOCKS === "true";
@@ -15,6 +16,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
   // from anywhere reachable outside this flag: see mocks/README notes.
   const [mocksReady, setMocksReady] = useState(!mocksEnabled);
   const [mocksError, setMocksError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Without this, a query cached before expiry (e.g. authKeys.me()) lingers
+    // and /login reads it as "already authenticated", bouncing back to the
+    // page it just left — a redirect loop between /login and /dashboard.
+    return session.onExpire(() => {
+      queryClient.clear();
+    });
+  }, [queryClient]);
 
   useEffect(() => {
     if (!mocksEnabled) return;
