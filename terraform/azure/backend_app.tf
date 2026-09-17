@@ -32,14 +32,14 @@ resource "azurerm_container_app" "backend" {
   }
 
   template {
-    min_replicas = 0
-    max_replicas = 1
+    min_replicas = 1
+    max_replicas = 3
 
     container {
       name   = "backend"
-      image  = "${azurerm_container_registry.backend.login_server}/smp-backend:0.1.4"
-      cpu    = 0.25
-      memory = "0.5Gi"
+      image  = "${azurerm_container_registry.backend.login_server}/smp-backend:0.1.8"
+      cpu    = 0.5
+      memory = "1Gi"
 
       env {
         name  = "APP_ENV"
@@ -121,12 +121,12 @@ resource "azurerm_container_app" "backend" {
 
       env {
         name  = "AZURE_RESOURCE_GROUP"
-        value = azurerm_resource_group.main.name
+        value = azurerm_resource_group.managed.name
       }
 
       env {
         name  = "AZURE_MANAGED_SUBNET_ID"
-        value = azurerm_subnet.app.id
+        value = azurerm_subnet.managed_vm.id
       }
 
       env {
@@ -147,6 +147,11 @@ resource "azurerm_container_app" "backend" {
       env {
         name  = "AZURE_DEFAULT_SSH_PUBLIC_KEY"
         value = trimspace(file("${path.module}/keys/secure-multicloud-azure.pub"))
+      }
+
+      env {
+        name  = "AZURE_MAX_MANAGED_VMS"
+        value = "2"
       }
 
       # Administrative kill switches.
