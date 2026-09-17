@@ -191,6 +191,120 @@ def test_viewer_can_list_instances(
     assert body[0]["is_managed"] is True
 
 
+def test_list_instances_refreshes_pending_resource_from_cloud(
+    client: TestClient,
+    viewer: User,
+    db_session: Session,
+    monkeypatch,
+):
+    resource = ManagedResource(
+        provider="aws",
+        cloud_resource_id="i-test000000000050",
+        name="test-aws-pending",
+        resource_type="virtual_machine",
+        region="us-east-2",
+        environment="test",
+        status="pending",
+        is_managed=True,
+    )
+
+    db_session.add(resource)
+    db_session.flush()
+
+    def fake_get_aws_instance_state(
+        instance_id: str,
+        role_code: str,
+    ) -> str:
+        return "running"
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.get_aws_instance_state",
+        fake_get_aws_instance_state,
+    )
+
+    response = client.get(
+        "/api/v1/instances",
+        headers=authorization_header(viewer),
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body[0]["status"] == "running"
+
+    db_session.refresh(resource)
+    assert resource.status == "running"
+
+
+def test_list_instances_does_not_query_cloud_for_stable_status(
+    client: TestClient,
+    viewer: User,
+    managed_resource: ManagedResource,
+    monkeypatch,
+):
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError(
+            "a resource with a stable status must not trigger a live cloud lookup"
+        )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.get_virtual_machine_power_state",
+        fail_if_called,
+    )
+
+    response = client.get(
+        "/api/v1/instances",
+        headers=authorization_header(viewer),
+    )
+
+    assert response.status_code == 200
+    assert response.json()[0]["status"] == "stopped"
+
+
+def test_list_instances_keeps_status_when_cloud_lookup_fails(
+    client: TestClient,
+    viewer: User,
+    db_session: Session,
+    monkeypatch,
+):
+    resource = ManagedResource(
+        provider="aws",
+        cloud_resource_id="i-test000000000051",
+        name="test-aws-pending-unreachable",
+        resource_type="virtual_machine",
+        region="us-east-2",
+        environment="test",
+        status="pending",
+        is_managed=True,
+    )
+
+    db_session.add(resource)
+    db_session.flush()
+
+    def fake_get_aws_instance_state(
+        instance_id: str,
+        role_code: str,
+    ) -> str:
+        raise AWSCloudError(
+            code="aws_configuration_error",
+            message="boom",
+        )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.get_aws_instance_state",
+        fake_get_aws_instance_state,
+    )
+
+    response = client.get(
+        "/api/v1/instances",
+        headers=authorization_header(viewer),
+    )
+
+    assert response.status_code == 200
+    assert response.json()[0]["status"] == "pending"
+
+
 def test_viewer_cannot_start_instance(
     client: TestClient,
     viewer: User,

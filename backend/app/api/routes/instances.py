@@ -1,3 +1,4 @@
+import logging
 import uuid
 from typing import Annotated
 
@@ -62,6 +63,8 @@ router = APIRouter(
     prefix="/instances",
     tags=["Instances"],
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================
@@ -1522,6 +1525,54 @@ def execute_aws_delete_action(
 # ============================================================
 
 
+def _refresh_resource_status_from_cloud(
+    resource: ManagedResource,
+    role_code: str,
+) -> None:
+    """
+    Best-effort live-status refresh for resources still marked "pending".
+
+    register_aws_managed_resource/register_azure_managed_resource always
+    create a resource as "pending", and nothing else updates it until an
+    explicit start/stop action runs. So once the cloud provider finishes
+    booting it on its own, the resource is stuck showing "pending" forever
+    even though it's really "running". Only "pending" resources are looked
+    up (running/stopped/terminated are only ever changed by an explicit
+    action, so they can't drift the same way) and a lookup failure
+    (unreachable cloud, demo/fake cloud_resource_id, throttling, etc.) must
+    never break the list — every failure here is swallowed and the
+    previously known status is kept.
+    """
+    if resource.status != "pending":
+        return
+
+    try:
+        if resource.provider == CloudProvider.AWS.value:
+            real_status = get_aws_instance_state(
+                resource.cloud_resource_id,
+                role_code,
+            )
+        elif resource.provider == CloudProvider.AZURE.value:
+            real_status = get_virtual_machine_power_state(
+                resource.cloud_resource_id,
+                role_code,
+            )
+        else:
+            return
+    except Exception:
+        # A live-lookup failure is never fatal to listing.
+        logger.warning(
+            "Live status lookup failed for %s resource %s",
+            resource.provider,
+            resource.id,
+            exc_info=True,
+        )
+        return
+
+    if real_status and real_status != resource.status:
+        resource.status = real_status
+
+
 @router.get(
     "",
     response_model=list[InstanceSummary],
@@ -1531,8 +1582,6 @@ def list_instances(
     current_user: CanReadInstances,
     db: DatabaseSession,
 ) -> list[ManagedResource]:
-    del current_user
-
     statement = (
         select(ManagedResource)
         .where(ManagedResource.is_managed.is_(True))
@@ -1542,7 +1591,17 @@ def list_instances(
         )
     )
 
-    return list(db.scalars(statement).all())
+    resources = list(db.scalars(statement).all())
+
+    for resource in resources:
+        _refresh_resource_status_from_cloud(
+            resource,
+            current_user.role.code,
+        )
+
+    db.commit()
+
+    return resources
 
 
 # ============================================================
