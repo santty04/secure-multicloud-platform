@@ -1744,6 +1744,74 @@ def test_aws_delete_uses_cloud_service_when_writes_are_enabled(
     )
 
 
+def test_aws_delete_skips_terminate_when_instance_is_already_gone(
+    client: TestClient,
+    administrator: User,
+    db_session: Session,
+    monkeypatch,
+):
+    resource = ManagedResource(
+        provider="aws",
+        cloud_resource_id="i-test000000000098",
+        name="test-aws-delete-stale-record",
+        resource_type="virtual_machine",
+        region="us-east-2",
+        environment="test",
+        status="stopped",
+        is_managed=True,
+    )
+
+    db_session.add(resource)
+    db_session.flush()
+
+    terminate_called = False
+
+    def fake_get_aws_instance_state_by_id(
+        instance_id: str,
+        role_code: str,
+    ) -> str | None:
+        assert instance_id == resource.cloud_resource_id
+        assert role_code == "administrator"
+        return None
+
+    def fake_terminate_aws_instance(
+        instance_id: str,
+        role_code: str,
+    ) -> None:
+        nonlocal terminate_called
+        del instance_id, role_code
+        terminate_called = True
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.get_aws_instance_state_by_id",
+        fake_get_aws_instance_state_by_id,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.terminate_aws_instance",
+        fake_terminate_aws_instance,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.settings.aws_write_enabled",
+        True,
+    )
+
+    response = client.delete(
+        f"/api/v1/instances/aws/{resource.id}",
+        headers=authorization_header(administrator),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "success"
+    assert terminate_called is False
+
+    db_session.refresh(resource)
+
+    assert resource.is_managed is False
+    assert resource.status == "terminated"
+
+
 def test_aws_delete_treats_instance_not_found_as_success(
     client: TestClient,
     administrator: User,
@@ -1763,6 +1831,19 @@ def test_aws_delete_treats_instance_not_found_as_success(
 
     db_session.add(resource)
     db_session.flush()
+
+    def fake_get_aws_instance_state_by_id(
+        instance_id: str,
+        role_code: str,
+    ) -> str | None:
+        assert instance_id == resource.cloud_resource_id
+        assert role_code == "administrator"
+        return "running"
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.get_aws_instance_state_by_id",
+        fake_get_aws_instance_state_by_id,
+    )
 
     def fake_terminate_aws_instance(
         instance_id: str,
