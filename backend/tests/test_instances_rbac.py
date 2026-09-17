@@ -1815,6 +1815,11 @@ def test_aws_delete_uses_cloud_service_when_writes_are_enabled(
         called_role = role_code
 
     monkeypatch.setattr(
+        "app.api.routes.instances.get_aws_instance_state_by_id",
+        lambda instance_id, role_code: "stopped",
+    )
+
+    monkeypatch.setattr(
         "app.api.routes.instances.terminate_aws_instance",
         fake_terminate_aws_instance,
     )
@@ -2037,6 +2042,11 @@ def test_aws_delete_failure_is_recorded(
             code="aws_access_denied",
             message="AWS denied the requested operation.",
         )
+
+    monkeypatch.setattr(
+        "app.api.routes.instances.get_aws_instance_state_by_id",
+        lambda instance_id, role_code: "stopped",
+    )
 
     monkeypatch.setattr(
         "app.api.routes.instances.terminate_aws_instance",
