@@ -8,6 +8,7 @@ from app.api.routes.operations import router as operations_router
 from app.api.routes.provisioning_requests import (
     router as provisioning_requests_router,
 )
+from app.api.routes.users import router as users_router
 from app.api.routes.validation import router as validation_router
 
 # ============================================================
@@ -27,6 +28,7 @@ root_router.include_router(validation_router)
 api_v1_router = APIRouter()
 
 api_v1_router.include_router(auth_router)
+api_v1_router.include_router(users_router)
 api_v1_router.include_router(instances_router)
 api_v1_router.include_router(operations_router)
 api_v1_router.include_router(ai_router)
