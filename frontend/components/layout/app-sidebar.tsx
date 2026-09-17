@@ -37,6 +37,12 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/operations", label: "Operaciones", icon: History },
   { href: "/audit-logs", label: "Auditoría", icon: FileText },
   {
+    href: "/users",
+    label: "Usuarios y roles",
+    icon: UserCog,
+    permission: "user.manage",
+  },
+  {
     href: "/ai",
     label: "Asistente IA",
     icon: Bot,
@@ -86,6 +92,7 @@ export function AppSidebar() {
     "/operations": pendingOpsCount,
     "/audit-logs": null,
     "/ai": null,
+    "/users": null,
   };
 
   const visibleNavItems = NAV_ITEMS.filter(
@@ -163,28 +170,6 @@ export function AppSidebar() {
             </Link>
           );
         })}
-
-        <button
-          type="button"
-          disabled
-          title="Módulo futuro"
-          className="flex cursor-not-allowed items-center gap-2.5 rounded-[10px] border-0 bg-transparent px-2.5 py-2 text-left text-[13px] font-medium text-smp-disabled"
-        >
-          <UserCog
-            className="size-[17px] flex-none"
-            strokeWidth={1.9}
-          />
-
-          {!collapsed && (
-            <>
-              <span className="flex-1">Usuarios y roles</span>
-
-              <span className="rounded-full bg-smp-line-soft px-1.5 py-px text-[9.5px] font-bold text-smp-ink-faint">
-                Próximamente
-              </span>
-            </>
-          )}
-        </button>
       </nav>
 
       <div

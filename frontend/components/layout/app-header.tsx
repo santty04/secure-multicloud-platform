@@ -10,6 +10,7 @@ const SECTION_LABELS: Record<string, string> = {
   "/operations": "Operaciones",
   "/audit-logs": "Auditoría",
   "/rbac": "Matriz de permisos",
+  "/users": "Usuarios y roles",
 };
 
 function sectionLabelFor(pathname: string): string {
