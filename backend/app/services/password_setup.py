@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.models import PasswordSetupToken, User
 from app.services.email import send_email
+from app.services.email_templates import render_password_setup_email
 
 _TOKEN_BYTES = 32
 
@@ -84,18 +85,14 @@ def send_password_setup_email(user: User, token: str) -> None:
     link = f"{settings.frontend_base_url.rstrip('/')}/set-password?token={token}"
     hours = settings.password_setup_token_expire_hours
     subject = f"Activa tu cuenta en {settings.app_name}"
-    html = (
-        f"<p>Hola {user.full_name},</p>"
-        f"<p>Se creó una cuenta para ti en {settings.app_name}. "
-        "Define tu contraseña para activarla:</p>"
-        f'<p><a href="{link}">Definir contraseña</a></p>'
-        f"<p>Este enlace vence en {hours} horas y solo puede usarse una vez. "
-        "Si no esperabas este correo, ignóralo.</p>"
+    html = render_password_setup_email(
+        app_name=settings.app_name, full_name=user.full_name, link=link, hours=hours
     )
     text = (
         f"Hola {user.full_name},\n\n"
         f"Se creó una cuenta para ti en {settings.app_name}. "
         f"Define tu contraseña en el siguiente enlace:\n{link}\n\n"
-        f"Este enlace vence en {hours} horas y solo puede usarse una vez."
+        f"Este enlace vence en {hours} horas y solo puede usarse una vez.\n"
+        "Si no esperabas este correo, puedes ignorarlo."
     )
     send_email(to=user.email, subject=subject, html=html, text=text)
