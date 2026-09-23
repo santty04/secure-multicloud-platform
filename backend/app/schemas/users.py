@@ -27,7 +27,7 @@ class UserFields(BaseModel):
 
 
 class UserCreate(UserFields):
-    password: str = Field(min_length=12, max_length=128, repr=False)
+    pass
 
 
 class UserUpdate(UserFields):

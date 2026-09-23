@@ -2,7 +2,13 @@ import { apiFetch } from "@/lib/api/client";
 import { toCurrentUser } from "@/lib/api/adapters/auth";
 import { endpoints } from "@/lib/api/endpoints";
 import { unexpectedResponseError } from "@/lib/api/errors";
-import { currentUserResponseSchema, tokenResponseSchema, type LoginRequest } from "@/schemas/auth";
+import {
+  currentUserResponseSchema,
+  passwordSetupTokenInfoSchema,
+  tokenResponseSchema,
+  type LoginRequest,
+  type SetPasswordRequest,
+} from "@/schemas/auth";
 import type { CurrentUser } from "@/types/domain";
 
 export async function login(credentials: LoginRequest) {
@@ -10,6 +16,30 @@ export async function login(credentials: LoginRequest) {
     method: "POST",
     auth: false,
     body: JSON.stringify(credentials),
+  });
+
+  const parsed = tokenResponseSchema.safeParse(raw);
+  if (!parsed.success) throw unexpectedResponseError();
+
+  return parsed.data;
+}
+
+export async function getPasswordSetupInfo(token: string) {
+  const raw = await apiFetch<unknown>(endpoints.passwordSetupInfo(token), {
+    auth: false,
+  });
+
+  const parsed = passwordSetupTokenInfoSchema.safeParse(raw);
+  if (!parsed.success) throw unexpectedResponseError();
+
+  return parsed.data;
+}
+
+export async function setPassword(payload: SetPasswordRequest) {
+  const raw = await apiFetch<unknown>(endpoints.setPassword(), {
+    method: "POST",
+    auth: false,
+    body: JSON.stringify(payload),
   });
 
   const parsed = tokenResponseSchema.safeParse(raw);

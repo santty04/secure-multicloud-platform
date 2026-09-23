@@ -1,3 +1,4 @@
+import secrets
 import uuid
 from typing import Annotated
 
@@ -15,6 +16,11 @@ from app.schemas.users import (
     UserListResponse,
     UserResponse,
     UserUpdate,
+)
+from app.services.email import EmailDeliveryError
+from app.services.password_setup import (
+    issue_password_setup_token,
+    send_password_setup_email,
 )
 
 router = APIRouter(tags=["Users and roles"])
@@ -120,6 +126,19 @@ def read_user(user_id: uuid.UUID, actor: Manager, db: DatabaseSession) -> UserRe
     return serialize_user(find_user(db, user_id))
 
 
+def _issue_and_send_invitation(db: DatabaseSession, user: User) -> None:
+    token = issue_password_setup_token(db, user)
+    db.commit()
+    try:
+        send_password_setup_email(user, token)
+    except EmailDeliveryError as exc:
+        raise HTTPException(
+            502,
+            "El usuario se guardó, pero no se pudo enviar el correo de "
+            "invitación. Reenvíala desde la lista de usuarios.",
+        ) from exc
+
+
 @router.post("/users", response_model=UserResponse, status_code=201)
 def create_user(
     payload: UserCreate, actor: Manager, db: DatabaseSession
@@ -133,10 +152,24 @@ def create_user(
         full_name=payload.full_name,
         role=role,
         is_active=payload.is_active,
-        password_hash=hash_password(payload.password),
+        # No admin-chosen password: the user sets their own via the
+        # one-time activation link, so this hash must never validate.
+        password_hash=hash_password(secrets.token_urlsafe(32)),
     )
     db.add(user)
-    return save_user(db, user)
+    response = save_user(db, user)
+    _issue_and_send_invitation(db, user)
+    return response
+
+
+@router.post("/users/{user_id}/resend-invitation", status_code=204)
+def resend_invitation(
+    user_id: uuid.UUID, actor: Manager, db: DatabaseSession
+) -> Response:
+    lock_management(db, actor)
+    user = find_user(db, user_id)
+    _issue_and_send_invitation(db, user)
+    return Response(status_code=204)
 
 
 @router.put("/users/{user_id}", response_model=UserResponse)

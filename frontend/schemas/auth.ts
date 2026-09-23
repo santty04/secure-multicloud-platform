@@ -13,6 +13,20 @@ export const tokenResponseSchema = z.object({
 });
 export type TokenResponse = z.infer<typeof tokenResponseSchema>;
 
+/** `SetPasswordRequest` — POST /api/v1/auth/set-password */
+export const setPasswordRequestSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(12).max(128),
+});
+export type SetPasswordRequest = z.infer<typeof setPasswordRequestSchema>;
+
+/** `PasswordSetupTokenInfo` — GET /api/v1/auth/set-password/:token */
+export const passwordSetupTokenInfoSchema = z.object({
+  email: z.string().email(),
+  full_name: z.string(),
+});
+export type PasswordSetupTokenInfo = z.infer<typeof passwordSetupTokenInfoSchema>;
+
 /** `CurrentUserResponse` — GET /api/v1/auth/me */
 export const currentUserResponseSchema = z.object({
   id: z.string(),
