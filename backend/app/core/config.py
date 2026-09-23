@@ -37,6 +37,16 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
 
     # ============================================================
+    # EMAIL (Resend)
+    # ============================================================
+
+    resend_api_key: str | None = None
+    email_from_address: str = "no-reply@example.com"
+    email_from_name: str = "Secure Multicloud Platform"
+    frontend_base_url: str = "http://localhost:3000"
+    password_setup_token_expire_hours: int = 48
+
+    # ============================================================
     # AZURE
     # ============================================================
 
