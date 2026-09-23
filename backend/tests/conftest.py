@@ -65,3 +65,20 @@ def client(
         yield test_client
 
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def captured_emails() -> list[dict]:
+    return []
+
+
+@pytest.fixture(autouse=True)
+def stub_password_setup_email(monkeypatch, captured_emails) -> None:
+    """Replace real Resend delivery with an in-memory capture for tests."""
+
+    def _fake_send(user, token) -> None:
+        captured_emails.append(
+            {"user_id": user.id, "email": user.email, "token": token}
+        )
+
+    monkeypatch.setattr("app.api.routes.users.send_password_setup_email", _fake_send)

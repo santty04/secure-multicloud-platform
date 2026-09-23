@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from app.core.security import create_access_token, hash_password, verify_password
 from app.db.models import Permission, Role, User
+from app.services.email import EmailDeliveryError
 
 
 @pytest.fixture
@@ -41,7 +42,6 @@ def payload(default_role_id, **changes):
     return {
         "email": "New@example.com",
         "full_name": " New User ",
-        "password": "NewPassword123!",
         "role_id": str(default_role_id),
         **changes,
     }
@@ -77,7 +77,7 @@ def test_management_requires_permission(client, accounts, method, path):
     assert call(path, headers=headers(viewer), **kwargs).status_code == 403
 
 
-def test_create_list_read_and_login(client, accounts, db_session):
+def test_create_list_read_and_login(client, accounts, db_session, captured_emails):
     admin, viewer = accounts
     response = client.post(
         "/api/v1/users", headers=headers(admin), json=payload(viewer.role_id)
@@ -87,7 +87,42 @@ def test_create_list_read_and_login(client, accounts, db_session):
     assert data["email"] == "new@example.com" and data["full_name"] == "New User"
     assert "password" not in data and "password_hash" not in data
     user = db_session.scalar(select(User).where(User.email == "new@example.com"))
+
+    # No admin-chosen password: the account isn't usable until the invite is redeemed.
+    assert (
+        client.post(
+            "/api/v1/auth/login",
+            json={"email": user.email, "password": "NewPassword123!"},
+        ).status_code
+        == 401
+    )
+    assert len(captured_emails) == 1
+    assert captured_emails[0]["email"] == "new@example.com"
+    token = captured_emails[0]["token"]
+
+    info = client.get(f"/api/v1/auth/set-password/{token}")
+    assert info.status_code == 200
+    assert info.json() == {"email": "new@example.com", "full_name": "New User"}
+
+    activation = client.post(
+        "/api/v1/auth/set-password",
+        json={"token": token, "password": "NewPassword123!"},
+    )
+    assert activation.status_code == 200
+    assert "access_token" in activation.json()
+    db_session.refresh(user)
     assert verify_password("NewPassword123!", user.password_hash)
+
+    # The token is single-use.
+    assert client.get(f"/api/v1/auth/set-password/{token}").status_code == 400
+    assert (
+        client.post(
+            "/api/v1/auth/set-password",
+            json={"token": token, "password": "AnotherPassword123!"},
+        ).status_code
+        == 400
+    )
+
     assert client.get(f"/api/v1/users/{user.id}", headers=headers(admin)).json() == data
     listing = client.get("/api/v1/users?q=new&limit=1", headers=headers(admin)).json()
     assert listing["total"] == 1 and len(listing["items"]) == 1
@@ -106,11 +141,45 @@ def test_create_list_read_and_login(client, accounts, db_session):
     assert any("user.manage" in role["permissions"] for role in roles)
 
 
+def test_resend_invitation_invalidates_previous_token(
+    client, accounts, db_session, captured_emails
+):
+    admin, viewer = accounts
+    client.post("/api/v1/users", headers=headers(admin), json=payload(viewer.role_id))
+    user = db_session.scalar(select(User).where(User.email == "new@example.com"))
+    first_token = captured_emails[0]["token"]
+
+    assert (
+        client.post(
+            f"/api/v1/users/{user.id}/resend-invitation", headers=headers(admin)
+        ).status_code
+        == 204
+    )
+    assert len(captured_emails) == 2
+    second_token = captured_emails[1]["token"]
+    assert second_token != first_token
+
+    assert client.get(f"/api/v1/auth/set-password/{first_token}").status_code == 400
+    assert client.get(f"/api/v1/auth/set-password/{second_token}").status_code == 200
+
+
+def test_email_delivery_failure_surfaces_502(client, accounts, monkeypatch):
+    admin, viewer = accounts
+
+    def _boom(user, token):
+        raise EmailDeliveryError("provider down")
+
+    monkeypatch.setattr("app.api.routes.users.send_password_setup_email", _boom)
+    response = client.post(
+        "/api/v1/users", headers=headers(admin), json=payload(viewer.role_id)
+    )
+    assert response.status_code == 502
+
+
 def test_duplicate_email_and_invalid_inputs(client, accounts):
     admin, viewer = accounts
     for changes, status in [
         ({"email": "READER@example.com"}, 409),
-        ({"password": "short"}, 422),
         ({"full_name": "   "}, 422),
         ({"email": "invalid"}, 422),
         ({"role_id": str(uuid.uuid4())}, 422),
@@ -122,7 +191,6 @@ def test_duplicate_email_and_invalid_inputs(client, accounts):
             json=payload(viewer.role_id, **changes),
         )
         assert result.status_code == status
-        assert "NewPassword123!" not in result.text
     assert (
         client.get("/api/v1/users?limit=101", headers=headers(admin)).status_code == 422
     )
