@@ -28,11 +28,14 @@ export async function listUsers(search: string, offset: number) {
 export async function listRoles() {
   return parse(z.array(roleSchema), await apiFetch<unknown>("/api/v1/roles"));
 }
-export async function saveUser(id: string | undefined, input: UserInput & { password?: string }) {
+export async function saveUser(id: string | undefined, input: UserInput) {
   return parse(userSchema, await apiFetch<unknown>(id ? `/api/v1/users/${id}` : "/api/v1/users", {
     method: id ? "PUT" : "POST", body: JSON.stringify(input),
   }));
 }
 export function deactivateUser(id: string) {
   return apiFetch<void>(`/api/v1/users/${id}`, { method: "DELETE" });
+}
+export function resendInvitation(id: string) {
+  return apiFetch<void>(`/api/v1/users/${id}/resend-invitation`, { method: "POST" });
 }
