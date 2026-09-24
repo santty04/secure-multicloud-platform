@@ -23,7 +23,7 @@ import { ErrorState } from "@/components/shared/error-state";
 import { TableSkeleton } from "@/components/shared/table-skeleton";
 import { Button } from "@/components/ui/button";
 import { useCurrentUser } from "@/features/auth/use-current-user";
-import { can } from "@/features/auth/can";
+import { canInCloud, cloudsWith } from "@/features/auth/can";
 import {
   useCreateInstance,
   useDeleteInstance,
@@ -43,7 +43,10 @@ const AWS_HEADERS = ["Instancia", "Instance ID", "Estado", "Tipo", "IP privada",
 export default function InstancesPage() {
   const currentUserQuery = useCurrentUser();
   const managedQuery = useManagedInstances();
-  const awsQuery = useLiveAwsInstances();
+  const currentUser = currentUserQuery.data;
+  // The live AWS inventory is only fetched (and shown) with AWS read access.
+  const canReadAws = canInCloud(currentUser, "aws", "vm.read");
+  const awsQuery = useLiveAwsInstances({ enabled: canReadAws });
   const createInstance = useCreateInstance();
   const startInstance = useStartInstance();
   const stopInstance = useStopInstance();
@@ -60,11 +63,17 @@ export default function InstancesPage() {
 
   const managedInstances = useMemo(() => managedQuery.data ?? [], [managedQuery.data]);
   const awsInstances = useMemo(() => awsQuery.data ?? [], [awsQuery.data]);
-  const permissions = currentUserQuery.data?.permissions;
-  const canCreate = can(permissions, "vm.create");
-  const canStart = can(permissions, "vm.start");
-  const canStop = can(permissions, "vm.stop");
-  const canDelete = can(permissions, "vm.delete");
+  // VM actions follow the user's role in each instance's cloud.
+  const creatableClouds = cloudsWith(currentUser, "vm.create");
+  const canCreate = creatableClouds.length > 0;
+  const actionsFor = (instance: Instance | null) => {
+    const provider = instance?.provider;
+    return {
+      canStart: provider !== undefined && canInCloud(currentUser, provider, "vm.start"),
+      canStop: provider !== undefined && canInCloud(currentUser, provider, "vm.stop"),
+      canDelete: provider !== undefined && canInCloud(currentUser, provider, "vm.delete"),
+    };
+  };
 
   const filteredManaged = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -94,7 +103,8 @@ export default function InstancesPage() {
 
   function retryAll() {
     managedQuery.refetch();
-    awsQuery.refetch();
+    // refetch() ignores `enabled`, so skip AWS without read access there.
+    if (canReadAws) awsQuery.refetch();
   }
 
   function apiErrorMessage(error: unknown) {
@@ -186,11 +196,14 @@ export default function InstancesPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {currentUserQuery.data ? (
+          {currentUser ? (
             <div className="flex items-center gap-2 rounded-full border border-smp-line bg-smp-surface-alt px-2.75 py-1.25 text-[11.5px] text-smp-ink-muted">
               <span className="size-1.5 rounded-full bg-smp-accent-soft" />
-              Actuando como{" "}
-              <strong className="font-semibold text-smp-ink">{currentUserQuery.data.roleName}</strong>
+              Azure:{" "}
+              <strong className="font-semibold text-smp-ink">{currentUser.cloudAccess.azure?.roleName ?? "Sin acceso"}</strong>
+              <span className="text-smp-ink-faint">·</span>
+              AWS:{" "}
+              <strong className="font-semibold text-smp-ink">{currentUser.cloudAccess.aws?.roleName ?? "Sin acceso"}</strong>
             </div>
           ) : null}
           <Button
@@ -200,7 +213,7 @@ export default function InstancesPage() {
               setCreateOpen(true);
             }}
             disabled={!canCreate}
-            title={canCreate ? "Crear instancia" : "Requiere permiso vm.create"}
+            title={canCreate ? "Crear instancia" : "Requiere permiso vm.create en Azure o AWS"}
             className="bg-smp-accent text-white hover:bg-smp-accent-hover"
           >
             <Plus className="size-3.5" aria-hidden="true" />
@@ -270,9 +283,7 @@ export default function InstancesPage() {
                 onStart={(target) => handleAction("start", target)}
                 onStop={(target) => handleAction("stop", target)}
                 onDelete={setDeleteTarget}
-                canStart={canStart}
-                canStop={canStop}
-                canDelete={canDelete}
+                {...actionsFor(instance)}
                 busyAction={busyTarget?.id === instance.id ? busyTarget.action : undefined}
               />
             ))
@@ -280,6 +291,7 @@ export default function InstancesPage() {
         </DataTable>
       </section>
 
+      {canReadAws ? (
       <section className="flex flex-col gap-2.5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -317,6 +329,7 @@ export default function InstancesPage() {
           )}
         </DataTable>
       </section>
+      ) : null}
 
       <InstanceDrawer
         instance={drawerTarget}
@@ -327,9 +340,7 @@ export default function InstancesPage() {
         onStart={(target) => handleAction("start", target)}
         onStop={(target) => handleAction("stop", target)}
         onDelete={setDeleteTarget}
-        canStart={canStart}
-        canStop={canStop}
-        canDelete={canDelete}
+        {...actionsFor(drawerTarget)}
         busyAction={busyTarget && busyTarget.id === drawerTarget?.id ? busyTarget.action : undefined}
       />
 
@@ -346,6 +357,7 @@ export default function InstancesPage() {
         isLoading={createInstance.isPending}
         errorMessage={createInstance.error ? apiErrorMessage(createInstance.error) : null}
         onSubmit={handleCreate}
+        allowedProviders={creatableClouds}
         onCancel={() => {
           createInstance.reset();
           setCreateOpen(false);

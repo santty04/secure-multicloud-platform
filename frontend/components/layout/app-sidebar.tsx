@@ -17,7 +17,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { can, type Permission } from "@/features/auth/can";
+import { can, cloudsWith, type Permission, type VmPermission } from "@/features/auth/can";
 import { useCurrentUser } from "@/features/auth/use-current-user";
 import { useInstances } from "@/features/instances/use-instances";
 import { useOperations } from "@/features/operations/use-operations";
@@ -29,7 +29,10 @@ type NavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
+  /** Platform permission required to see the item. */
   permission?: Permission;
+  /** VM permission required in at least one cloud. */
+  cloudPermission?: VmPermission;
 };
 
 const NAV_ITEMS: NavItem[] = [
@@ -47,7 +50,7 @@ const NAV_ITEMS: NavItem[] = [
     href: "/ai",
     label: "Asistente IA",
     icon: Bot,
-    permission: "vm.create",
+    cloudPermission: "vm.create",
   },
 ];
 
@@ -117,7 +120,9 @@ export function AppSidebar({ mobileOpen, onMobileClose }: { mobileOpen: boolean;
   }, [mobileOpen, onMobileClose]);
 
   const visibleNavItems = NAV_ITEMS.filter(
-    (item) => !item.permission || can(permissions, item.permission),
+    (item) =>
+      (!item.permission || can(permissions, item.permission)) &&
+      (!item.cloudPermission || cloudsWith(currentUserQuery.data, item.cloudPermission).length > 0),
   );
 
   // Labels hide only on desktop when collapsed; the phone drawer keeps them.

@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { can } from "@/features/auth/can";
+import { cloudsWith } from "@/features/auth/can";
 import { useCurrentUser } from "@/features/auth/use-current-user";
 import {
   useApproveProvisioningRequest,
@@ -56,8 +56,9 @@ export default function AIPage() {
   const [provisioningRequest, setProvisioningRequest] =
     useState<ProvisioningRequestResponse | null>(null);
 
-  const permissions = currentUserQuery.data?.permissions;
-  const hasAccess = can(permissions, "vm.create");
+  // Requests end in a VM, so only clouds with vm.create are offered.
+  const creatableClouds = cloudsWith(currentUserQuery.data, "vm.create");
+  const hasAccess = creatableClouds.length > 0;
 
   if (currentUserQuery.isPending) {
     return (
@@ -74,7 +75,7 @@ export default function AIPage() {
           Acceso restringido
         </h1>
         <p className="mt-2 text-sm text-smp-ink-muted">
-          El Asistente IA requiere el permiso vm.create.
+          El Asistente IA requiere el permiso vm.create en Azure o en AWS.
         </p>
       </div>
     );
@@ -444,9 +445,17 @@ export default function AIPage() {
               }
               className="rounded-lg border border-smp-line-2 bg-smp-surface-alt px-3 py-2 text-xs text-smp-ink outline-none"
             >
-              <option value="auto">Proveedor automático</option>
-              <option value="aws">AWS</option>
-              <option value="azure">Azure</option>
+              <option value="auto">
+                {creatableClouds.length === 1
+                  ? `Proveedor: ${creatableClouds[0] === "aws" ? "AWS" : "Azure"}`
+                  : "Proveedor automático"}
+              </option>
+              {creatableClouds.length > 1 ? (
+                <>
+                  <option value="aws">AWS</option>
+                  <option value="azure">Azure</option>
+                </>
+              ) : null}
             </select>
 
             <span className="text-[11px] text-smp-ink-dim">

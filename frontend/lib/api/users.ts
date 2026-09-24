@@ -6,6 +6,8 @@ const userSchema = z.object({
   id: z.string().uuid(), email: z.string().email(), full_name: z.string(),
   is_active: z.boolean(), role_id: z.string().uuid(), role_code: z.string(),
   role_name: z.string(), created_at: z.string(),
+  azure_role_id: z.string().uuid().nullable(), azure_role_code: z.string().nullable(), azure_role_name: z.string().nullable(),
+  aws_role_id: z.string().uuid().nullable(), aws_role_code: z.string().nullable(), aws_role_name: z.string().nullable(),
 });
 const roleSchema = z.object({
   id: z.string().uuid(), code: z.string(), name: z.string(),
@@ -13,7 +15,9 @@ const roleSchema = z.object({
 });
 export type ManagedUser = z.infer<typeof userSchema>;
 export type ManagedRole = z.infer<typeof roleSchema>;
-export type UserInput = Pick<ManagedUser, "email" | "full_name" | "role_id" | "is_active">;
+export type UserInput = Pick<ManagedUser, "email" | "full_name" | "role_id" | "azure_role_id" | "aws_role_id" | "is_active">;
+/** Roles that have a cloud identity and can therefore be granted per cloud. */
+export const CLOUD_ROLE_CODES = ["viewer", "operator", "administrator"];
 
 function parse<T>(schema: z.ZodType<T>, raw: unknown): T {
   const result = schema.safeParse(raw);

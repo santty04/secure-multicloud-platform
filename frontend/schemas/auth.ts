@@ -47,6 +47,15 @@ export const passwordSetupTokenInfoSchema = z.object({
 });
 export type PasswordSetupTokenInfo = z.infer<typeof passwordSetupTokenInfoSchema>;
 
+/** Per-cloud VM access inside `CurrentUserResponse`; null means no access. */
+const cloudAccessSchema = z
+  .object({
+    role_code: z.string(),
+    role_name: z.string(),
+    permissions: z.array(z.string()),
+  })
+  .nullable();
+
 /** `CurrentUserResponse` — GET /api/v1/auth/me */
 export const currentUserResponseSchema = z.object({
   id: z.string(),
@@ -56,5 +65,6 @@ export const currentUserResponseSchema = z.object({
   role_code: z.string(),
   role_name: z.string(),
   permissions: z.array(z.string()),
+  cloud_access: z.object({ azure: cloudAccessSchema, aws: cloudAccessSchema }),
 });
 export type CurrentUserResponse = z.infer<typeof currentUserResponseSchema>;

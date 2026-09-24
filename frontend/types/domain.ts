@@ -16,6 +16,15 @@ export interface CurrentUser {
   isActive: boolean;
   roleCode: string;
   roleName: string;
+  /** Platform permissions (users, operations, audit). */
+  permissions: string[];
+  /** VM access per cloud; `null` when the user has no access to that cloud. */
+  cloudAccess: Record<CloudProvider, CloudAccess | null>;
+}
+
+export interface CloudAccess {
+  roleCode: string;
+  roleName: string;
   permissions: string[];
 }
 

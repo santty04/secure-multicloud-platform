@@ -92,7 +92,7 @@ async function handleInstanceAction(
     return errorResponse(404, "http_error", "El recurso solicitado no existe o ya no está administrado por la plataforma.");
   }
 
-  if (!user.permissions.includes(requiredPermission)) {
+  if (!user.cloud_access[provider]?.permissions.includes(requiredPermission)) {
     const correlationId = crypto.randomUUID();
     logPermissionDenied({ user, provider, resourceId, action, requiredPermission, request, correlationId });
     return errorResponse(403, "http_error", "Insufficient permissions.", correlationId);
@@ -190,16 +190,17 @@ export const handlers = [
   http.get("/api/v1/instances", ({ request }) => {
     const user = getAuthedUser(request);
     if (!user) return unauthorized();
-    if (!user.permissions.includes("vm.read")) {
-      return errorResponse(403, "http_error", "Insufficient permissions.");
-    }
-    return HttpResponse.json(getInstances());
+    // Mirrors the backend: only clouds the user can read are listed.
+    const readable = (["azure", "aws"] as const).filter((cloud) =>
+      user.cloud_access[cloud]?.permissions.includes("vm.read"),
+    );
+    return HttpResponse.json(getInstances().filter((instance) => readable.some((cloud) => cloud === instance.provider)));
   }),
 
   http.get("/api/v1/instances/aws/live", ({ request }) => {
     const user = getAuthedUser(request);
     if (!user) return unauthorized();
-    if (!user.permissions.includes("vm.read")) {
+    if (!user.cloud_access.aws?.permissions.includes("vm.read")) {
       return errorResponse(403, "http_error", "Insufficient permissions.");
     }
     const liveAws: LiveAwsInstanceSummaryResponse[] = [
@@ -228,14 +229,13 @@ export const handlers = [
   http.get("/api/v1/instances/:provider/:resourceId/status", ({ request, params }) => {
     const user = getAuthedUser(request);
     if (!user) return unauthorized();
-    if (!user.permissions.includes("vm.read")) {
-      return errorResponse(403, "http_error", "Insufficient permissions.");
-    }
-
     const provider = String(params.provider);
     const resourceId = String(params.resourceId);
     if (!isCloudProvider(provider)) {
       return errorResponse(422, "http_error", "La solicitud contiene datos inválidos.");
+    }
+    if (!user.cloud_access[provider]?.permissions.includes("vm.read")) {
+      return errorResponse(403, "http_error", "Insufficient permissions.");
     }
 
     const instance = findInstance(provider, resourceId);
