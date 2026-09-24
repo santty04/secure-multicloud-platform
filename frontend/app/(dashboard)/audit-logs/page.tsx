@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Lock } from "lucide-react";
 import { DataTable } from "@/components/shared/data-table";
 import { TableSkeleton } from "@/components/shared/table-skeleton";
@@ -10,10 +10,13 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { AuditFilters } from "@/components/audit/audit-filters";
 import { AuditRow } from "@/components/audit/audit-row";
 import { AuditDrawer } from "@/components/audit/audit-drawer";
+import { AuthEventsView } from "@/components/audit/auth-events-view";
 import { resolveResourceName } from "@/components/audit/audit-format";
 import { useAuditLogs } from "@/features/audit/use-audit-logs";
 import { useInstances } from "@/features/instances/use-instances";
 import { useCurrentUser } from "@/features/auth/use-current-user";
+import { can } from "@/features/auth/can";
+import { cn } from "@/lib/utils";
 import type { AuditDecision, CloudProvider } from "@/types/domain";
 
 const GRID_COLUMNS = "150px minmax(150px,1fr) 96px minmax(150px,1.1fr) 92px 108px minmax(140px,1fr)";
@@ -26,7 +29,7 @@ const HEADERS = ["Fecha y hora", "Usuario", "Acción", "Recurso", "Proveedor", "
  * the already-fetched list, and the drawer finds its row in that same list
  * rather than re-fetching.
  */
-export default function AuditLogsPage() {
+function OperationsAudit() {
   const searchParams = useSearchParams();
   const auditLogsQuery = useAuditLogs();
   const instancesQuery = useInstances();
@@ -82,20 +85,7 @@ export default function AuditLogsPage() {
   }
 
   return (
-    <div className="flex max-w-[1500px] flex-col gap-3.5">
-      <div className="flex flex-wrap items-end justify-between gap-5">
-        <div>
-          <h1 className="mb-1 text-2xl font-semibold tracking-tight text-smp-ink">Auditoría</h1>
-          <p className="m-0 text-[13px] text-smp-ink-dim">
-            Registro de decisiones de autorización. Los eventos denegados se resaltan.
-          </p>
-        </div>
-        <div className="inline-flex items-center gap-2 rounded-full border border-smp-line-2 bg-smp-surface-alt px-3 py-1.5 text-[11.5px] text-smp-ink-muted">
-          <Lock className="size-3.5 text-smp-accent-soft" aria-hidden="true" />
-          Solo lectura · sin escritura desde el frontend
-        </div>
-      </div>
-
+    <>
       <AuditFilters
         search={search}
         onSearchChange={setSearch}
@@ -139,6 +129,71 @@ export default function AuditLogsPage() {
         instanceNameById={instanceNameById}
         currentUserId={currentUserQuery.data?.id}
       />
+    </>
+  );
+}
+
+const TABS = [
+  { id: "operations", label: "Operaciones" },
+  { id: "logins", label: "Inicios de sesión" },
+] as const;
+
+export default function AuditLogsPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentUserQuery = useCurrentUser();
+  // Sign-in events expose emails and IPs: the backend limits them to user managers.
+  const canSeeLogins = can(currentUserQuery.data?.permissions, "user.manage");
+  const tab = canSeeLogins && searchParams.get("tab") === "logins" ? "logins" : "operations";
+
+  function selectTab(next: (typeof TABS)[number]["id"]) {
+    const params = new URLSearchParams(searchParams);
+    if (next === "logins") params.set("tab", "logins");
+    else params.delete("tab");
+    params.delete("cid");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
+
+  return (
+    <div className="flex max-w-[1500px] flex-col gap-3.5">
+      <div className="flex flex-wrap items-end justify-between gap-5">
+        <div>
+          <h1 className="mb-1 text-2xl font-semibold tracking-tight text-smp-ink">Auditoría</h1>
+          <p className="m-0 text-[13px] text-smp-ink-dim">
+            Decisiones de autorización e inicios de sesión. Los eventos denegados o sospechosos se resaltan.
+          </p>
+        </div>
+        <div className="inline-flex items-center gap-2 rounded-full border border-smp-line-2 bg-smp-surface-alt px-3 py-1.5 text-[11.5px] text-smp-ink-muted">
+          <Lock className="size-3.5 text-smp-accent-soft" aria-hidden="true" />
+          Solo lectura · sin escritura desde el frontend
+        </div>
+      </div>
+
+      {canSeeLogins ? (
+        <div role="tablist" aria-label="Tipo de auditoría" className="flex gap-1 border-b border-smp-line">
+          {TABS.map(({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => selectTab(id)}
+              className={cn(
+                "-mb-px border-0 border-b-2 bg-transparent px-3 py-2 text-[13px] font-semibold",
+                tab === id
+                  ? "border-smp-accent text-smp-ink"
+                  : "border-transparent text-smp-ink-dim hover:text-smp-ink",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {tab === "logins" ? <AuthEventsView /> : <OperationsAudit />}
     </div>
   );
 }
