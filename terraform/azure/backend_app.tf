@@ -100,6 +100,12 @@ resource "azurerm_container_app" "backend" {
         value = "https://secure-multicloud-platform-zeta.vercel.app"
       }
 
+      # Second login factor: 6-digit code emailed after the password check.
+      env {
+        name  = "MFA_ENABLED"
+        value = "true"
+      }
+
       # ========================================================
       # POSTGRESQL
       # ========================================================
