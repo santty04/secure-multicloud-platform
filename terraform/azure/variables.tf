@@ -21,3 +21,10 @@ variable "backend_secret_key" {
   type        = string
   sensitive   = true
 }
+
+variable "resend_api_key" {
+  description = "Resend API key used by the backend to send account activation emails"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
