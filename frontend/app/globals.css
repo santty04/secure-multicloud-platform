@@ -124,6 +124,16 @@
   * {
     @apply border-border outline-ring/50;
   }
+
+  /* iOS Safari zooms into any field whose text is under 16px when it gets
+     focus. Phones get 16px fields; the emailed-code box keeps its larger size. */
+  @media (max-width: 767px) {
+    input:not([type="checkbox"], [type="radio"], [autocomplete="one-time-code"]),
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
+  }
   body {
     @apply bg-background text-foreground;
   }

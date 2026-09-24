@@ -63,3 +63,20 @@ export function AuthHeroPanel() {
     </div>
   );
 }
+
+/** Compact brand shown above auth forms when the hero panel is hidden (below lg). */
+export function AuthMobileBrand() {
+  return (
+    <div className="mb-8 flex items-center gap-2.5 lg:hidden">
+      <div className="grid size-[34px] shrink-0 place-items-center rounded-[10px] bg-smp-accent shadow-[0_6px_18px_-6px_rgba(47,127,246,.8)]">
+        <ShieldCheck size={18} color="#061021" strokeWidth={2.2} aria-hidden="true" />
+      </div>
+      <div>
+        <div className="text-[14px] font-bold tracking-[-.01em] text-smp-ink">Secure Multicloud Platform</div>
+        <div className="text-[10.5px] tracking-[.04em] text-smp-ink-faint">
+          ADMINISTRACIÓN SEGURA DE INFRAESTRUCTURA
+        </div>
+      </div>
+    </div>
+  );
+}

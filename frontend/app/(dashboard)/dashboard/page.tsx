@@ -68,7 +68,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(196px,1fr))] gap-3">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-fit,minmax(196px,1fr))] sm:gap-3">
         {kpis.map(({ key, ...k }) => (
           <KpiCard key={key} {...k} />
         ))}
