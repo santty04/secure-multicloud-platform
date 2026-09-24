@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, Eye, EyeOff } from "lucide-react";
 import { z } from "zod";
-import { AuthHeroPanel } from "@/components/auth/auth-hero-panel";
+import { AuthHeroPanel, AuthMobileBrand } from "@/components/auth/auth-hero-panel";
 import { useSetPassword } from "@/features/auth/hooks";
 import { getPasswordSetupInfo } from "@/lib/api/auth";
 import { isApiError } from "@/lib/api/errors";
@@ -28,6 +28,7 @@ function InvalidLinkCard() {
   return (
     <div className="grid place-items-center px-6 py-12 lg:px-10">
       <div className="w-full max-w-[392px] text-center">
+        <AuthMobileBrand />
         <h2 className="mb-1.5 text-[23px] font-semibold tracking-[-.01em] text-smp-ink">
           Enlace no válido
         </h2>
@@ -95,6 +96,7 @@ function SetPasswordContent() {
 
       <div className="grid place-items-center px-6 py-12 lg:px-10">
         <div className="w-full max-w-[392px]">
+          <AuthMobileBrand />
           <h2 className="mb-1.5 text-[23px] font-semibold tracking-[-.01em] text-smp-ink">
             Activa tu cuenta
           </h2>
@@ -114,6 +116,9 @@ function SetPasswordContent() {
                   id="smp-pass"
                   type={showPassword ? "text" : "password"}
                   autoComplete="new-password"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   disabled={tokenInfo.isPending}
                   aria-invalid={Boolean(form.formState.errors.password)}
                   aria-describedby={form.formState.errors.password ? "smp-password-error" : undefined}
@@ -150,6 +155,9 @@ function SetPasswordContent() {
                 id="smp-pass-confirm"
                 type={showPassword ? "text" : "password"}
                 autoComplete="new-password"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 disabled={tokenInfo.isPending}
                 aria-invalid={Boolean(form.formState.errors.confirmPassword)}
                 aria-describedby={form.formState.errors.confirmPassword ? "smp-confirm-error" : undefined}

@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Eye, EyeOff } from "lucide-react";
-import { AuthHeroPanel } from "@/components/auth/auth-hero-panel";
+import { AuthHeroPanel, AuthMobileBrand } from "@/components/auth/auth-hero-panel";
 import { LoginCodeStep } from "@/components/auth/login-code-step";
 import { useCurrentUser, useHasAccessToken, useLogin } from "@/features/auth/hooks";
 import { loginRequestSchema, type LoginChallenge, type LoginRequest } from "@/schemas/auth";
@@ -79,6 +79,7 @@ export default function LoginPage() {
           />
         ) : (
           <div className="w-full max-w-[392px]">
+            <AuthMobileBrand />
             {MOCKS_ENABLED ? (
               <div className="mb-5 inline-flex items-center gap-[7px] rounded-full border border-smp-warning/35 bg-smp-warning/12 px-[11px] py-1 text-[11px] font-semibold tracking-[.04em] text-smp-warning">
                 MODO DEMOSTRACIÓN · DATOS MOCK
@@ -101,6 +102,9 @@ export default function LoginPage() {
                   id="smp-email"
                   type="email"
                   autoComplete="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   aria-invalid={Boolean(form.formState.errors.email)}
                   aria-describedby={form.formState.errors.email ? "smp-email-error" : undefined}
                   {...form.register("email")}
@@ -123,6 +127,9 @@ export default function LoginPage() {
                     id="smp-pass"
                     type={showPassword ? "text" : "password"}
                     autoComplete="current-password"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     aria-invalid={Boolean(form.formState.errors.password)}
                     aria-describedby={form.formState.errors.password ? "smp-password-error" : undefined}
                     {...form.register("password")}
