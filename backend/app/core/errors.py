@@ -30,7 +30,8 @@ async def http_exception_handler(
                 "correlation_id": correlation_id,
             }
         },
-        headers={"X-Correlation-ID": correlation_id},
+        # Keep headers the route set (e.g. WWW-Authenticate, Retry-After).
+        headers={**(exception.headers or {}), "X-Correlation-ID": correlation_id},
     )
 
 
