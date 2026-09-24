@@ -31,13 +31,24 @@ resource "azurerm_container_app" "backend" {
     value = var.backend_secret_key
   }
 
+  # Only created once a Resend key is provided; without it the backend
+  # stores new users but reports that the invitation email was not sent.
+  dynamic "secret" {
+    for_each = nonsensitive(var.resend_api_key != "") ? [1] : []
+
+    content {
+      name  = "resend-api-key"
+      value = var.resend_api_key
+    }
+  }
+
   template {
     min_replicas = 1
     max_replicas = 3
 
     container {
       name   = "backend"
-      image  = "${azurerm_container_registry.backend.login_server}/smp-backend:0.1.10"
+      image  = "${azurerm_container_registry.backend.login_server}/smp-backend:0.1.11"
       cpu    = 0.5
       memory = "1Gi"
 
@@ -64,6 +75,29 @@ resource "azurerm_container_app" "backend" {
       env {
         name        = "SECRET_KEY"
         secret_name = "jwt-secret"
+      }
+
+      # ========================================================
+      # EMAIL (Resend) - account activation links
+      # ========================================================
+
+      dynamic "env" {
+        for_each = nonsensitive(var.resend_api_key != "") ? [1] : []
+
+        content {
+          name        = "RESEND_API_KEY"
+          secret_name = "resend-api-key"
+        }
+      }
+
+      env {
+        name  = "EMAIL_FROM_ADDRESS"
+        value = "no-reply@smp.sisoper.uk"
+      }
+
+      env {
+        name  = "FRONTEND_BASE_URL"
+        value = "https://secure-multicloud-platform-zeta.vercel.app"
       }
 
       # ========================================================
