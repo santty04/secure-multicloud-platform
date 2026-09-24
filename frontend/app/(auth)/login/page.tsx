@@ -53,6 +53,9 @@ export default function LoginPage() {
     }
     if (login.error.status === 401) return "Correo o contraseña incorrectos.";
     if (login.error.status === 422) return "Revisa el correo y la contraseña ingresados.";
+    if (login.error.status === 429) {
+      return "Demasiados intentos fallidos. Por seguridad, espera unos minutos antes de volver a intentarlo.";
+    }
     return login.error.message || "No se pudo completar el inicio de sesión.";
   }
 

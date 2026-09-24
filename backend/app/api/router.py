@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.routes.ai import router as ai_router
 from app.api.routes.auth import router as auth_router
+from app.api.routes.auth_events import router as auth_events_router
 from app.api.routes.health import router as health_router
 from app.api.routes.instances import router as instances_router
 from app.api.routes.operations import router as operations_router
@@ -28,6 +29,7 @@ root_router.include_router(validation_router)
 api_v1_router = APIRouter()
 
 api_v1_router.include_router(auth_router)
+api_v1_router.include_router(auth_events_router)
 api_v1_router.include_router(users_router)
 api_v1_router.include_router(instances_router)
 api_v1_router.include_router(operations_router)

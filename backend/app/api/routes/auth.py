@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
@@ -15,6 +15,18 @@ from app.schemas.auth import (
     SetPasswordRequest,
     TokenResponse,
     VerifyLoginCodeRequest,
+)
+from app.services.auth_events import (
+    CHALLENGE_LOCKED,
+    CODE_FAILED,
+    CODE_RESENT,
+    CODE_SENT,
+    LOGIN_SUCCEEDED,
+    LOGIN_THROTTLED,
+    PASSWORD_FAILED,
+    lock_account_attempts,
+    login_retry_after,
+    record_auth_event,
 )
 from app.services.email import EmailDeliveryError
 from app.services.login_mfa import (
@@ -58,6 +70,23 @@ def _send_code(user: User, code: str) -> None:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, _CODE_NOT_SENT) from exc
 
 
+def _throttled(retry_after: int) -> HTTPException:
+    return HTTPException(
+        status.HTTP_429_TOO_MANY_REQUESTS,
+        "Demasiados intentos fallidos. Espera unos minutos e inténtalo de nuevo.",
+        headers={"Retry-After": str(retry_after)},
+    )
+
+
+def _invalid_credentials() -> HTTPException:
+    # Same answer for unknown, wrong and inactive accounts: no enumeration.
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid email or password.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
 @router.post(
     "/login",
     response_model=TokenResponse | LoginChallengeResponse,
@@ -65,40 +94,69 @@ def _send_code(user: User, code: str) -> None:
 )
 def login(
     credentials: LoginRequest,
+    request: Request,
     db: DatabaseSession,
 ) -> TokenResponse | LoginChallengeResponse:
     normalized_email = str(credentials.email).strip().lower()
 
-    statement = select(User).where(User.email == normalized_email)
-    user = db.scalar(statement)
+    # Throttle by the typed address, whether or not an account exists, so the
+    # response does not reveal which emails are registered.
+    lock_account_attempts(db, normalized_email)
+    retry_after = login_retry_after(db, normalized_email)
+    if retry_after is not None:
+        record_auth_event(db, request, LOGIN_THROTTLED, email=normalized_email)
+        db.commit()
+        raise _throttled(retry_after)
 
-    if user is None or not verify_password(
-        credentials.password,
-        user.password_hash,
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    user = db.scalar(select(User).where(User.email == normalized_email))
 
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password.",
-            headers={"WWW-Authenticate": "Bearer"},
+    if user is None:
+        failure = "unknown_account"
+    elif not verify_password(credentials.password, user.password_hash):
+        failure = "wrong_password"
+    elif not user.is_active:
+        failure = "inactive_account"
+    else:
+        failure = None
+
+    if failure is not None:
+        record_auth_event(
+            db,
+            request,
+            PASSWORD_FAILED,
+            email=normalized_email,
+            user=user,
+            details={"reason": failure},
         )
+        db.commit()
+        raise _invalid_credentials()
 
     if settings.mfa_enabled:
         challenge, code = start_login_challenge(db, user)
+        record_auth_event(
+            db,
+            request,
+            CODE_SENT,
+            email=normalized_email,
+            user=user,
+            details={"challenge_id": str(challenge.id)},
+        )
         db.commit()
         _send_code(user, code)
         return _challenge_response(challenge, user)
 
-    token = create_access_token(subject=str(user.id))
+    record_auth_event(
+        db,
+        request,
+        LOGIN_SUCCEEDED,
+        email=normalized_email,
+        user=user,
+        details={"mfa": False},
+    )
+    db.commit()
 
     return TokenResponse(
-        access_token=token,
+        access_token=create_access_token(subject=str(user.id)),
         token_type="bearer",
     )
 
@@ -110,17 +168,48 @@ def login(
 )
 def verify_login_code(
     payload: VerifyLoginCodeRequest,
+    request: Request,
     db: DatabaseSession,
 ) -> TokenResponse:
-    user = verify_login_challenge(db, payload.challenge_id, payload.code)
+    check = verify_login_challenge(db, payload.challenge_id, payload.code)
+    details = {"challenge_id": str(payload.challenge_id)}
+
+    if check.user is not None and not check.accepted:
+        record_auth_event(
+            db,
+            request,
+            CODE_FAILED,
+            email=check.user.email,
+            user=check.user,
+            details=details,
+        )
+        if check.locked:
+            record_auth_event(
+                db,
+                request,
+                CHALLENGE_LOCKED,
+                email=check.user.email,
+                user=check.user,
+                details=details,
+            )
+    elif check.accepted:
+        record_auth_event(
+            db,
+            request,
+            LOGIN_SUCCEEDED,
+            email=check.user.email,
+            user=check.user,
+            details={**details, "mfa": True},
+        )
+
     # Commit either way: a failed guess must still count as an attempt.
     db.commit()
 
-    if user is None:
+    if not check.accepted:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, _INVALID_CODE)
 
     return TokenResponse(
-        access_token=create_access_token(subject=str(user.id)),
+        access_token=create_access_token(subject=str(check.user.id)),
         token_type="bearer",
     )
 
@@ -132,6 +221,7 @@ def verify_login_code(
 )
 def resend_login_code(
     payload: ResendLoginCodeRequest,
+    request: Request,
     db: DatabaseSession,
 ) -> LoginChallengeResponse:
     try:
@@ -154,6 +244,14 @@ def resend_login_code(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, _INVALID_CODE)
 
     challenge, user, code = reissued
+    record_auth_event(
+        db,
+        request,
+        CODE_RESENT,
+        email=user.email,
+        user=user,
+        details={"challenge_id": str(challenge.id), "sends": challenge.sends},
+    )
     db.commit()
     _send_code(user, code)
     return _challenge_response(challenge, user)

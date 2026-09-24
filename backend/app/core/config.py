@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     login_code_max_sends: int = 3
     login_code_resend_cooldown_seconds: int = 30
 
+    # Per-account lockout: this many failed passwords or codes within the
+    # window block further sign-in attempts until the window slides past.
+    login_max_failures: int = 10
+    login_lockout_window_minutes: int = 15
+
     # ============================================================
     # EMAIL (Resend)
     # ============================================================
