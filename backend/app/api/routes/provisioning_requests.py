@@ -89,12 +89,10 @@ async def create_provisioning_request(
     db: DatabaseSession,
 ) -> ProvisioningRequestResponse:
     try:
-        provisioning_request = (
-            await create_provisioning_request_from_advisor(
-                db,
-                payload=payload,
-                current_user=current_user,
-            )
+        provisioning_request = await create_provisioning_request_from_advisor(
+            db,
+            payload=payload,
+            current_user=current_user,
         )
 
     except AIConfigurationError as exc:
@@ -271,14 +269,14 @@ def reject_request(
     return ProvisioningRequestResponse.model_validate(
         provisioning_request,
     )
+
+
 def _validate_executable_provisioning_request(
     provisioning_request: ProvisioningRequest,
 ) -> None:
     catalog = get_infrastructure_catalog()
 
-    provider_catalog = catalog.get(
-        provisioning_request.provider
-    )
+    provider_catalog = catalog.get(provisioning_request.provider)
 
     if provider_catalog is None:
         raise HTTPException(
@@ -316,10 +314,7 @@ def _validate_executable_provisioning_request(
             detail="Provisioning region is outside the current catalog.",
         )
 
-    if (
-        provisioning_request.instance_type
-        not in provider_catalog["instance_types"]
-    ):
+    if provisioning_request.instance_type not in provider_catalog["instance_types"]:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Instance type is outside the current catalog.",
@@ -364,9 +359,7 @@ def execute_provisioning_request(
             detail="Provisioning request not found.",
         ) from exc
 
-    _validate_executable_provisioning_request(
-        provisioning_request
-    )
+    _validate_executable_provisioning_request(provisioning_request)
 
     provisioning_request.status = "executing"
     provisioning_request.execution_started_at = datetime.now(UTC)
@@ -382,13 +375,10 @@ def execute_provisioning_request(
         None,
     )
 
-    request.state.correlation_id = str(
-        provisioning_request.correlation_id
-    )
+    request.state.correlation_id = str(provisioning_request.correlation_id)
 
     resource_name = (
-        f"smp-{provisioning_request.provider}-"
-        f"{provisioning_request.id.hex[:8]}"
+        f"smp-{provisioning_request.provider}-{provisioning_request.id.hex[:8]}"
     )
 
     try:
@@ -428,8 +418,7 @@ def execute_provisioning_request(
 
         operation = db.scalar(
             select(Operation).where(
-                Operation.correlation_id
-                == provisioning_request.correlation_id
+                Operation.correlation_id == provisioning_request.correlation_id
             )
         )
 
@@ -450,15 +439,12 @@ def execute_provisioning_request(
         db.commit()
         db.refresh(provisioning_request)
 
-        return ProvisioningRequestResponse.model_validate(
-            provisioning_request
-        )
+        return ProvisioningRequestResponse.model_validate(provisioning_request)
 
     except HTTPException as exc:
         operation = db.scalar(
             select(Operation).where(
-                Operation.correlation_id
-                == provisioning_request.correlation_id
+                Operation.correlation_id == provisioning_request.correlation_id
             )
         )
 

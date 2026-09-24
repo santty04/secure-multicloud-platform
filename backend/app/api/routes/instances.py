@@ -459,16 +459,14 @@ def execute_aws_create_action(
         if cleanup_requested:
             error_code = "aws_registration_failed"
             error_message = (
-                "AWS instance registration failed and "
-                "cloud cleanup was requested."
+                "AWS instance registration failed and cloud cleanup was requested."
             )
             cleanup_status = "termination_requested"
 
         else:
             error_code = "aws_registration_cleanup_failed"
             error_message = (
-                "AWS instance registration failed and "
-                "automatic cloud cleanup failed."
+                "AWS instance registration failed and automatic cloud cleanup failed."
             )
             cleanup_status = "cleanup_failed"
 
@@ -491,9 +489,7 @@ def execute_aws_create_action(
         }
 
         if not cleanup_requested:
-            failure_details["orphaned_cloud_resource_id"] = (
-                instance_id
-            )
+            failure_details["orphaned_cloud_resource_id"] = instance_id
 
         create_audit_log(
             db,
@@ -551,12 +547,12 @@ def execute_azure_create_action(
     )
 
     existing_resource = db.scalar(
-    select(ManagedResource).where(
-        ManagedResource.provider == CloudProvider.AZURE.value,
-        ManagedResource.name == payload.name,
-        ManagedResource.is_managed.is_(True),
+        select(ManagedResource).where(
+            ManagedResource.provider == CloudProvider.AZURE.value,
+            ManagedResource.name == payload.name,
+            ManagedResource.is_managed.is_(True),
+        )
     )
-)
 
     if existing_resource is not None:
         raise HTTPException(
@@ -565,13 +561,13 @@ def execute_azure_create_action(
         )
 
     managed_azure_vm_count = db.scalar(
-    select(func.count())
-    .select_from(ManagedResource)
-    .where(
-        ManagedResource.provider == CloudProvider.AZURE.value,
-        ManagedResource.is_managed.is_(True),
+        select(func.count())
+        .select_from(ManagedResource)
+        .where(
+            ManagedResource.provider == CloudProvider.AZURE.value,
+            ManagedResource.is_managed.is_(True),
+        )
     )
-)
 
     if managed_azure_vm_count >= settings.azure_max_managed_vms:
         raise HTTPException(
@@ -639,16 +635,12 @@ def execute_azure_create_action(
             db,
             operation=operation,
             error_code="azure_ssh_key_not_configured",
-            error_message=(
-                "Azure default SSH public key is not configured."
-            ),
+            error_message=("Azure default SSH public key is not configured."),
             result_summary={
                 "execution_mode": "azure",
                 "resource_name": payload.name,
             },
         )
-
-        
 
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -671,8 +663,6 @@ def execute_azure_create_action(
         )
 
     except Exception as exc:
-        
-
         mark_operation_failed(
             db,
             operation=operation,
@@ -709,9 +699,7 @@ def execute_azure_create_action(
 
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=(
-                "Azure virtual machine create operation failed."
-            ),
+            detail=("Azure virtual machine create operation failed."),
         ) from exc
 
     try:
@@ -766,8 +754,7 @@ def execute_azure_create_action(
             operation=operation,
             error_code="azure_registration_failed",
             error_message=(
-                "Azure virtual machine was created but "
-                "local registration failed."
+                "Azure virtual machine was created but local registration failed."
             ),
             result_summary={
                 "execution_mode": "azure",
@@ -794,9 +781,7 @@ def execute_azure_create_action(
             details={
                 "execution_mode": "azure",
                 "error_type": "database_registration_error",
-                "orphaned_cloud_resource_id": (
-                    cloud_resource_id
-                ),
+                "orphaned_cloud_resource_id": (cloud_resource_id),
             },
         )
 
@@ -918,9 +903,7 @@ def execute_azure_start_action(
 
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=(
-                "Azure virtual machine start operation failed."
-            ),
+            detail=("Azure virtual machine start operation failed."),
         ) from exc
 
     return InstanceActionResponse(
@@ -1147,9 +1130,7 @@ def execute_azure_stop_action(
 
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=(
-                "Azure virtual machine stop operation failed."
-            ),
+            detail=("Azure virtual machine stop operation failed."),
         ) from exc
 
     return InstanceActionResponse(
@@ -1728,10 +1709,7 @@ def get_instance_status(
         if real_status is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=(
-                    "AWS EC2 instance not found or "
-                    "not managed by the platform."
-                ),
+                detail=("AWS EC2 instance not found or not managed by the platform."),
             )
 
     return InstanceStatusResponse(
@@ -1764,10 +1742,7 @@ def start_instance(
         resource_id,
     )
 
-    if (
-        provider is CloudProvider.AZURE
-        and settings.azure_write_enabled
-    ):
+    if provider is CloudProvider.AZURE and settings.azure_write_enabled:
         return execute_azure_start_action(
             request=request,
             db=db,
@@ -1775,10 +1750,7 @@ def start_instance(
             current_user=current_user,
         )
 
-    if (
-        provider is CloudProvider.AWS
-        and settings.aws_write_enabled
-    ):
+    if provider is CloudProvider.AWS and settings.aws_write_enabled:
         return execute_aws_start_action(
             request=request,
             db=db,
@@ -1819,10 +1791,7 @@ def stop_instance(
         resource_id,
     )
 
-    if (
-        provider is CloudProvider.AZURE
-        and settings.azure_write_enabled
-    ):
+    if provider is CloudProvider.AZURE and settings.azure_write_enabled:
         return execute_azure_stop_action(
             request=request,
             db=db,
@@ -1830,10 +1799,7 @@ def stop_instance(
             current_user=current_user,
         )
 
-    if (
-        provider is CloudProvider.AWS
-        and settings.aws_write_enabled
-    ):
+    if provider is CloudProvider.AWS and settings.aws_write_enabled:
         return execute_aws_stop_action(
             request=request,
             db=db,
@@ -1874,10 +1840,7 @@ def delete_instance(
         resource_id,
     )
 
-    if (
-        provider is CloudProvider.AZURE
-        and settings.azure_write_enabled
-    ):
+    if provider is CloudProvider.AZURE and settings.azure_write_enabled:
         return execute_azure_delete_action(
             request=request,
             db=db,
@@ -1885,10 +1848,7 @@ def delete_instance(
             current_user=current_user,
         )
 
-    if (
-        provider is CloudProvider.AWS
-        and settings.aws_write_enabled
-    ):
+    if provider is CloudProvider.AWS and settings.aws_write_enabled:
         return execute_aws_delete_action(
             request=request,
             db=db,

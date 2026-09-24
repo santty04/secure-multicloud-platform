@@ -75,9 +75,7 @@ def get_provisioning_request(
     )
 
     if provisioning_request is None:
-        raise ProvisioningRequestNotFoundError(
-            "Provisioning request was not found."
-        )
+        raise ProvisioningRequestNotFoundError("Provisioning request was not found.")
 
     return provisioning_request
 
@@ -105,9 +103,7 @@ def list_provisioning_requests(
         ProvisioningRequest.created_at.desc(),
     ).limit(limit)
 
-    return list(
-        db.scalars(statement).all()
-    )
+    return list(db.scalars(statement).all())
 
 
 def approve_provisioning_request(
