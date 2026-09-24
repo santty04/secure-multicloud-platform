@@ -12,7 +12,12 @@ from app.ai.errors import (
     AIPolicyViolationError,
     AIServiceUnavailableError,
 )
-from app.api.dependencies import DatabaseSession, require_permission
+from app.api.dependencies import (
+    DatabaseSession,
+    clouds_with_permission,
+    ensure_cloud_permission,
+    require_any_cloud_permission,
+)
 from app.api.routes.instances import (
     execute_aws_create_action,
     execute_azure_create_action,
@@ -46,9 +51,12 @@ router = APIRouter(
 )
 
 
+# Requests end in a VM being created, so they follow the caller's vm.create
+# access per cloud: entering the feature needs it in at least one cloud, and
+# each request is only visible or actionable to users who can create there.
 CanManageProvisioningRequests = Annotated[
     User,
-    Depends(require_permission("vm.create")),
+    Depends(require_any_cloud_permission("vm.create")),
 ]
 
 
@@ -88,6 +96,13 @@ async def create_provisioning_request(
     current_user: CanManageProvisioningRequests,
     db: DatabaseSession,
 ) -> ProvisioningRequestResponse:
+    creatable = clouds_with_permission(current_user, "vm.create")
+    if payload.provider_preference is None and len(creatable) == 1:
+        # Steer the advisor to the only cloud this user may create in.
+        payload = payload.model_copy(update={"provider_preference": creatable[0]})
+    elif payload.provider_preference is not None:
+        ensure_cloud_permission(current_user, payload.provider_preference, "vm.create")
+
     try:
         provisioning_request = await create_provisioning_request_from_advisor(
             db,
@@ -118,6 +133,13 @@ async def create_provisioning_request(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="AI recommendation violated platform policy.",
         ) from exc
+
+    if provisioning_request.provider not in creatable:
+        # The advisor picked a cloud the caller has no create access to.
+        db.rollback()
+        ensure_cloud_permission(
+            current_user, provisioning_request.provider, "vm.create"
+        )
 
     _commit_and_refresh(
         db,
@@ -150,12 +172,11 @@ def read_provisioning_requests(
         Query(ge=1, le=500),
     ] = 100,
 ) -> list[ProvisioningRequestResponse]:
-    del current_user
-
     provisioning_requests = list_provisioning_requests(
         db,
         status=request_status,
         provider=provider,
+        providers=clouds_with_permission(current_user, "vm.create"),
         limit=limit,
     )
 
@@ -175,12 +196,13 @@ def read_provisioning_request(
     current_user: CanManageProvisioningRequests,
     db: DatabaseSession,
 ) -> ProvisioningRequestResponse:
-    del current_user
-
     try:
         provisioning_request = get_provisioning_request(
             db,
             request_id=request_id,
+        )
+        ensure_cloud_permission(
+            current_user, provisioning_request.provider, "vm.create"
         )
 
     except ProvisioningRequestNotFoundError as exc:
@@ -206,6 +228,9 @@ def approve_request(
         provisioning_request = get_provisioning_request(
             db,
             request_id=request_id,
+        )
+        ensure_cloud_permission(
+            current_user, provisioning_request.provider, "vm.create"
         )
 
         provisioning_request = approve_provisioning_request(
@@ -246,6 +271,9 @@ def reject_request(
         provisioning_request = get_provisioning_request(
             db,
             request_id=request_id,
+        )
+        ensure_cloud_permission(
+            current_user, provisioning_request.provider, "vm.create"
         )
 
         provisioning_request = reject_provisioning_request(
@@ -358,6 +386,8 @@ def execute_provisioning_request(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provisioning request not found.",
         ) from exc
+
+    ensure_cloud_permission(current_user, provisioning_request.provider, "vm.create")
 
     _validate_executable_provisioning_request(provisioning_request)
 

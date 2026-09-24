@@ -79,4 +79,5 @@ class Role(Base):
 
     users: Mapped[list["User"]] = relationship(
         back_populates="role",
+        foreign_keys="User.role_id",
     )

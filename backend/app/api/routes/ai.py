@@ -10,7 +10,7 @@ from app.ai.errors import (
 )
 from app.ai.factory import get_ai_provider
 from app.ai.service import generate_infrastructure_recommendation
-from app.api.dependencies import require_permission
+from app.api.dependencies import require_any_cloud_permission
 from app.core.config import settings
 from app.db.models import User
 from app.schemas.ai import (
@@ -27,7 +27,7 @@ router = APIRouter(
 
 CanUseInfrastructureAdvisor = Annotated[
     User,
-    Depends(require_permission("vm.create")),
+    Depends(require_any_cloud_permission("vm.create")),
 ]
 
 

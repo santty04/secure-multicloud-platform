@@ -69,6 +69,8 @@ def create_admin() -> None:
             password_hash=hash_password(password),
             is_active=True,
             role_id=administrator_role.id,
+            azure_role_id=administrator_role.id,
+            aws_role_id=administrator_role.id,
         )
 
         db.add(admin)

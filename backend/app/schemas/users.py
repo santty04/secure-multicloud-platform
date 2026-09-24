@@ -10,6 +10,11 @@ class UserFields(BaseModel):
     email: EmailStr = Field(max_length=255)
     full_name: str = Field(min_length=1, max_length=150)
     role_id: uuid.UUID
+    # Role applied to each cloud's virtual machines; null means no access.
+    # Required (though nullable) so a client that omits them cannot silently
+    # strip a user's cloud access.
+    azure_role_id: uuid.UUID | None
+    aws_role_id: uuid.UUID | None
     is_active: bool = True
 
     @field_validator("email")
@@ -50,6 +55,12 @@ class UserResponse(BaseModel):
     role_id: uuid.UUID
     role_code: str
     role_name: str
+    azure_role_id: uuid.UUID | None
+    azure_role_code: str | None
+    azure_role_name: str | None
+    aws_role_id: uuid.UUID | None
+    aws_role_code: str | None
+    aws_role_name: str | None
     created_at: datetime
 
 

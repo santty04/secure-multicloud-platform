@@ -42,6 +42,8 @@ def create_test_user(
         password_hash="not-used-in-these-tests",
         is_active=True,
         role=role,
+        azure_role=role,
+        aws_role=role,
     )
 
     db_session.add(user)

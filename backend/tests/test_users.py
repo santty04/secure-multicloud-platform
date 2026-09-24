@@ -43,6 +43,8 @@ def payload(default_role_id, **changes):
         "email": "New@example.com",
         "full_name": " New User ",
         "role_id": str(default_role_id),
+        "azure_role_id": str(default_role_id),
+        "aws_role_id": None,
         **changes,
     }
 
@@ -52,6 +54,8 @@ def update_payload(user, **changes):
         "email": user.email,
         "full_name": user.full_name,
         "role_id": str(user.role_id),
+        "azure_role_id": str(user.azure_role_id) if user.azure_role_id else None,
+        "aws_role_id": str(user.aws_role_id) if user.aws_role_id else None,
         "is_active": user.is_active,
         **changes,
     }
