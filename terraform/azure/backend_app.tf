@@ -48,7 +48,7 @@ resource "azurerm_container_app" "backend" {
 
     container {
       name   = "backend"
-      image  = "${azurerm_container_registry.backend.login_server}/smp-backend:0.1.11"
+      image  = "${azurerm_container_registry.backend.login_server}/smp-backend:0.1.12"
       cpu    = 0.5
       memory = "1Gi"
 
@@ -98,6 +98,12 @@ resource "azurerm_container_app" "backend" {
       env {
         name  = "FRONTEND_BASE_URL"
         value = "https://secure-multicloud-platform-zeta.vercel.app"
+      }
+
+      # Second login factor: 6-digit code emailed after the password check.
+      env {
+        name  = "MFA_ENABLED"
+        value = "true"
       }
 
       # ========================================================
