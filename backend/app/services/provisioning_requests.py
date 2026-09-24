@@ -75,9 +75,7 @@ def get_provisioning_request(
     )
 
     if provisioning_request is None:
-        raise ProvisioningRequestNotFoundError(
-            "Provisioning request was not found."
-        )
+        raise ProvisioningRequestNotFoundError("Provisioning request was not found.")
 
     return provisioning_request
 
@@ -87,9 +85,13 @@ def list_provisioning_requests(
     *,
     status: ProvisioningRequestStatus | None = None,
     provider: str | None = None,
+    providers: list[str] | None = None,
     limit: int = 100,
 ) -> list[ProvisioningRequest]:
     statement = select(ProvisioningRequest)
+
+    if providers is not None:
+        statement = statement.where(ProvisioningRequest.provider.in_(providers))
 
     if status is not None:
         statement = statement.where(
@@ -105,9 +107,7 @@ def list_provisioning_requests(
         ProvisioningRequest.created_at.desc(),
     ).limit(limit)
 
-    return list(
-        db.scalars(statement).all()
-    )
+    return list(db.scalars(statement).all())
 
 
 def approve_provisioning_request(

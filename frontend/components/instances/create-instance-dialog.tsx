@@ -32,14 +32,19 @@ export function CreateInstanceDialog({
   errorMessage,
   onSubmit,
   onCancel,
+  allowedProviders,
 }: {
   open: boolean;
+  /** Clouds where the user holds vm.create; the others are not offered. */
+  allowedProviders: CloudProvider[];
   isLoading?: boolean;
   errorMessage?: string | null;
   onSubmit: (payload: CreatePayload) => void;
   onCancel: () => void;
 }) {
-  const [provider, setProvider] = useState<CloudProvider>("aws");
+  const [chosenProvider, setProvider] = useState<CloudProvider>("aws");
+  // Fall back to an allowed cloud if the remembered choice is no longer allowed.
+  const provider = allowedProviders.includes(chosenProvider) ? chosenProvider : (allowedProviders[0] ?? chosenProvider);
   const [name, setName] = useState("");
   const [fieldError, setFieldError] = useState<string | null>(null);
 
@@ -86,6 +91,7 @@ export function CreateInstanceDialog({
         </DialogHeader>
 
         <div className="flex rounded-[10px] border border-smp-line-2 bg-smp-input p-1">
+          {allowedProviders.includes("aws") ? (
           <button
             type="button"
             onClick={() => setProvider("aws")}
@@ -96,6 +102,8 @@ export function CreateInstanceDialog({
             <Cloud className="size-3.5" aria-hidden="true" />
             AWS
           </button>
+          ) : null}
+          {allowedProviders.includes("azure") ? (
           <button
             type="button"
             onClick={() => setProvider("azure")}
@@ -106,6 +114,7 @@ export function CreateInstanceDialog({
             <Server className="size-3.5" aria-hidden="true" />
             Azure
           </button>
+          ) : null}
         </div>
 
         <div className="grid gap-3">

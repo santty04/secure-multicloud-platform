@@ -45,6 +45,13 @@ class PasswordSetupTokenInfo(BaseModel):
     full_name: str
 
 
+class CloudAccessResponse(BaseModel):
+    role_code: str
+    role_name: str
+    # Only the vm.* permissions: the ones a cloud role actually grants.
+    permissions: list[str]
+
+
 class CurrentUserResponse(BaseModel):
     id: uuid.UUID
     email: EmailStr
@@ -53,3 +60,5 @@ class CurrentUserResponse(BaseModel):
     role_code: str
     role_name: str
     permissions: list[str]
+    # Per-cloud VM access; null when the user has no access to that cloud.
+    cloud_access: dict[Literal["azure", "aws"], CloudAccessResponse | None]

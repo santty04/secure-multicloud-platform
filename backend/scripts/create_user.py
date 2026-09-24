@@ -85,6 +85,8 @@ def create_user() -> None:
             password_hash=hash_password(password),
             is_active=True,
             role_id=role.id,
+            azure_role_id=role.id,
+            aws_role_id=role.id,
         )
 
         db.add(user)

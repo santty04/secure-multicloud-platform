@@ -54,6 +54,8 @@ def admin_user(db_session: Session) -> User:
         password_hash=hash_password(ADMIN_PASSWORD),
         is_active=True,
         role=role,
+        azure_role=role,
+        aws_role=role,
     )
 
     db_session.add(user)

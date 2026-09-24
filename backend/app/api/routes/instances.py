@@ -7,8 +7,12 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.dependencies import (
+    CLOUD_PROVIDERS,
+    CurrentUser,
     DatabaseSession,
-    require_permission,
+    cloud_role_code,
+    has_cloud_permission,
+    require_cloud_permission,
 )
 from app.cloud.aws.ec2 import (
     create_instance as create_aws_instance,
@@ -71,29 +75,42 @@ logger = logging.getLogger(__name__)
 # RBAC DEPENDENCIES
 # ============================================================
 
-CanCreateInstances = Annotated[
+# VM permissions come from the caller's role in the target cloud, not from
+# the platform role. Routes with a `{provider}` path parameter resolve it at
+# request time; provider-specific routes pin it.
+CanCreateAwsInstances = Annotated[
     User,
-    Depends(require_permission("vm.create")),
+    Depends(require_cloud_permission("vm.create", "aws")),
+]
+
+CanCreateAzureInstances = Annotated[
+    User,
+    Depends(require_cloud_permission("vm.create", "azure")),
+]
+
+CanReadAwsInventory = Annotated[
+    User,
+    Depends(require_cloud_permission("vm.read", "aws")),
 ]
 
 CanReadInstances = Annotated[
     User,
-    Depends(require_permission("vm.read")),
+    Depends(require_cloud_permission("vm.read")),
 ]
 
 CanStartInstances = Annotated[
     User,
-    Depends(require_permission("vm.start")),
+    Depends(require_cloud_permission("vm.start")),
 ]
 
 CanStopInstances = Annotated[
     User,
-    Depends(require_permission("vm.stop")),
+    Depends(require_cloud_permission("vm.stop")),
 ]
 
 CanDeleteInstances = Annotated[
     User,
-    Depends(require_permission("vm.delete")),
+    Depends(require_cloud_permission("vm.delete")),
 ]
 
 
@@ -220,7 +237,7 @@ def execute_simulated_action(
         decision="allowed",
         reason_code="permission_granted",
         required_permission=required_permission,
-        role_code=current_user.role.code,
+        role_code=cloud_role_code(current_user, provider.value),
         event_type="operation",
         http_method=request.method,
         request_path=request.url.path,
@@ -297,7 +314,7 @@ def execute_aws_create_action(
         decision="allowed",
         reason_code="permission_granted",
         required_permission="vm.create",
-        role_code=current_user.role.code,
+        role_code=cloud_role_code(current_user, "aws"),
         event_type="operation",
         http_method=request.method,
         request_path=request.url.path,
@@ -331,7 +348,7 @@ def execute_aws_create_action(
     try:
         create_kwargs: dict[str, str | int] = {
             "name": payload.name,
-            "role_code": current_user.role.code,
+            "role_code": cloud_role_code(current_user, "aws"),
             "client_token": str(correlation_id),
         }
 
@@ -374,7 +391,7 @@ def execute_aws_create_action(
             decision="allowed",
             reason_code="cloud_operation_failed",
             required_permission="vm.create",
-            role_code=current_user.role.code,
+            role_code=cloud_role_code(current_user, "aws"),
             event_type="operation_failure",
             http_method=request.method,
             request_path=request.url.path,
@@ -429,7 +446,7 @@ def execute_aws_create_action(
             decision="allowed",
             reason_code="cloud_operation_succeeded",
             required_permission="vm.create",
-            role_code=current_user.role.code,
+            role_code=cloud_role_code(current_user, "aws"),
             event_type="operation_success",
             http_method=request.method,
             request_path=request.url.path,
@@ -449,7 +466,7 @@ def execute_aws_create_action(
         try:
             terminate_aws_instance(
                 instance_id,
-                current_user.role.code,
+                cloud_role_code(current_user, "aws"),
             )
             cleanup_requested = True
 
@@ -459,16 +476,14 @@ def execute_aws_create_action(
         if cleanup_requested:
             error_code = "aws_registration_failed"
             error_message = (
-                "AWS instance registration failed and "
-                "cloud cleanup was requested."
+                "AWS instance registration failed and cloud cleanup was requested."
             )
             cleanup_status = "termination_requested"
 
         else:
             error_code = "aws_registration_cleanup_failed"
             error_message = (
-                "AWS instance registration failed and "
-                "automatic cloud cleanup failed."
+                "AWS instance registration failed and automatic cloud cleanup failed."
             )
             cleanup_status = "cleanup_failed"
 
@@ -491,9 +506,7 @@ def execute_aws_create_action(
         }
 
         if not cleanup_requested:
-            failure_details["orphaned_cloud_resource_id"] = (
-                instance_id
-            )
+            failure_details["orphaned_cloud_resource_id"] = instance_id
 
         create_audit_log(
             db,
@@ -506,7 +519,7 @@ def execute_aws_create_action(
             decision="allowed",
             reason_code="resource_registration_failed",
             required_permission="vm.create",
-            role_code=current_user.role.code,
+            role_code=cloud_role_code(current_user, "aws"),
             event_type="operation_failure",
             http_method=request.method,
             request_path=request.url.path,
@@ -551,12 +564,12 @@ def execute_azure_create_action(
     )
 
     existing_resource = db.scalar(
-    select(ManagedResource).where(
-        ManagedResource.provider == CloudProvider.AZURE.value,
-        ManagedResource.name == payload.name,
-        ManagedResource.is_managed.is_(True),
+        select(ManagedResource).where(
+            ManagedResource.provider == CloudProvider.AZURE.value,
+            ManagedResource.name == payload.name,
+            ManagedResource.is_managed.is_(True),
+        )
     )
-)
 
     if existing_resource is not None:
         raise HTTPException(
@@ -565,13 +578,13 @@ def execute_azure_create_action(
         )
 
     managed_azure_vm_count = db.scalar(
-    select(func.count())
-    .select_from(ManagedResource)
-    .where(
-        ManagedResource.provider == CloudProvider.AZURE.value,
-        ManagedResource.is_managed.is_(True),
+        select(func.count())
+        .select_from(ManagedResource)
+        .where(
+            ManagedResource.provider == CloudProvider.AZURE.value,
+            ManagedResource.is_managed.is_(True),
+        )
     )
-)
 
     if managed_azure_vm_count >= settings.azure_max_managed_vms:
         raise HTTPException(
@@ -603,7 +616,7 @@ def execute_azure_create_action(
         decision="allowed",
         reason_code="permission_granted",
         required_permission="vm.create",
-        role_code=current_user.role.code,
+        role_code=cloud_role_code(current_user, "azure"),
         event_type="operation",
         http_method=request.method,
         request_path=request.url.path,
@@ -639,16 +652,12 @@ def execute_azure_create_action(
             db,
             operation=operation,
             error_code="azure_ssh_key_not_configured",
-            error_message=(
-                "Azure default SSH public key is not configured."
-            ),
+            error_message=("Azure default SSH public key is not configured."),
             result_summary={
                 "execution_mode": "azure",
                 "resource_name": payload.name,
             },
         )
-
-        
 
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -660,7 +669,7 @@ def execute_azure_create_action(
     try:
         cloud_resource_id = create_virtual_machine(
             name=payload.name,
-            role_code=current_user.role.code,
+            role_code=cloud_role_code(current_user, "azure"),
             ssh_public_key=settings.azure_default_ssh_public_key,
             admin_username=settings.azure_default_admin_username,
             size=size or settings.azure_default_vm_size,
@@ -671,8 +680,6 @@ def execute_azure_create_action(
         )
 
     except Exception as exc:
-        
-
         mark_operation_failed(
             db,
             operation=operation,
@@ -695,7 +702,7 @@ def execute_azure_create_action(
             decision="allowed",
             reason_code="cloud_operation_failed",
             required_permission="vm.create",
-            role_code=current_user.role.code,
+            role_code=cloud_role_code(current_user, "azure"),
             event_type="operation_failure",
             http_method=request.method,
             request_path=request.url.path,
@@ -709,9 +716,7 @@ def execute_azure_create_action(
 
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=(
-                "Azure virtual machine create operation failed."
-            ),
+            detail=("Azure virtual machine create operation failed."),
         ) from exc
 
     try:
@@ -746,7 +751,7 @@ def execute_azure_create_action(
             decision="allowed",
             reason_code="cloud_operation_succeeded",
             required_permission="vm.create",
-            role_code=current_user.role.code,
+            role_code=cloud_role_code(current_user, "azure"),
             event_type="operation_success",
             http_method=request.method,
             request_path=request.url.path,
@@ -766,8 +771,7 @@ def execute_azure_create_action(
             operation=operation,
             error_code="azure_registration_failed",
             error_message=(
-                "Azure virtual machine was created but "
-                "local registration failed."
+                "Azure virtual machine was created but local registration failed."
             ),
             result_summary={
                 "execution_mode": "azure",
@@ -787,16 +791,14 @@ def execute_azure_create_action(
             decision="allowed",
             reason_code="resource_registration_failed",
             required_permission="vm.create",
-            role_code=current_user.role.code,
+            role_code=cloud_role_code(current_user, "azure"),
             event_type="operation_failure",
             http_method=request.method,
             request_path=request.url.path,
             details={
                 "execution_mode": "azure",
                 "error_type": "database_registration_error",
-                "orphaned_cloud_resource_id": (
-                    cloud_resource_id
-                ),
+                "orphaned_cloud_resource_id": (cloud_resource_id),
             },
         )
 
@@ -854,7 +856,7 @@ def execute_azure_start_action(
         decision="allowed",
         reason_code="permission_granted",
         required_permission="vm.start",
-        role_code=current_user.role.code,
+        role_code=cloud_role_code(current_user, "azure"),
         event_type="operation",
         http_method=request.method,
         request_path=request.url.path,
@@ -866,7 +868,7 @@ def execute_azure_start_action(
     try:
         start_virtual_machine(
             resource.cloud_resource_id,
-            current_user.role.code,
+            cloud_role_code(current_user, "azure"),
         )
 
         mark_operation_success(
@@ -904,7 +906,7 @@ def execute_azure_start_action(
             decision="allowed",
             reason_code="cloud_operation_failed",
             required_permission="vm.start",
-            role_code=current_user.role.code,
+            role_code=cloud_role_code(current_user, "azure"),
             event_type="operation_failure",
             http_method=request.method,
             request_path=request.url.path,
@@ -918,9 +920,7 @@ def execute_azure_start_action(
 
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=(
-                "Azure virtual machine start operation failed."
-            ),
+            detail=("Azure virtual machine start operation failed."),
         ) from exc
 
     return InstanceActionResponse(
@@ -969,7 +969,7 @@ def execute_aws_start_action(
         decision="allowed",
         reason_code="permission_granted",
         required_permission="vm.start",
-        role_code=current_user.role.code,
+        role_code=cloud_role_code(current_user, "aws"),
         event_type="operation",
         http_method=request.method,
         request_path=request.url.path,
@@ -981,7 +981,7 @@ def execute_aws_start_action(
     try:
         start_aws_instance(
             resource.cloud_resource_id,
-            current_user.role.code,
+            cloud_role_code(current_user, "aws"),
         )
 
         mark_operation_success(
@@ -1019,7 +1019,7 @@ def execute_aws_start_action(
             decision="allowed",
             reason_code="cloud_operation_failed",
             required_permission="vm.start",
-            role_code=current_user.role.code,
+            role_code=cloud_role_code(current_user, "aws"),
             event_type="operation_failure",
             http_method=request.method,
             request_path=request.url.path,
@@ -1083,7 +1083,7 @@ def execute_azure_stop_action(
         decision="allowed",
         reason_code="permission_granted",
         required_permission="vm.stop",
-        role_code=current_user.role.code,
+        role_code=cloud_role_code(current_user, "azure"),
         event_type="operation",
         http_method=request.method,
         request_path=request.url.path,
@@ -1095,7 +1095,7 @@ def execute_azure_stop_action(
     try:
         stop_virtual_machine(
             resource.cloud_resource_id,
-            current_user.role.code,
+            cloud_role_code(current_user, "azure"),
         )
 
         mark_operation_success(
@@ -1133,7 +1133,7 @@ def execute_azure_stop_action(
             decision="allowed",
             reason_code="cloud_operation_failed",
             required_permission="vm.stop",
-            role_code=current_user.role.code,
+            role_code=cloud_role_code(current_user, "azure"),
             event_type="operation_failure",
             http_method=request.method,
             request_path=request.url.path,
@@ -1147,9 +1147,7 @@ def execute_azure_stop_action(
 
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=(
-                "Azure virtual machine stop operation failed."
-            ),
+            detail=("Azure virtual machine stop operation failed."),
         ) from exc
 
     return InstanceActionResponse(
@@ -1198,7 +1196,7 @@ def execute_aws_stop_action(
         decision="allowed",
         reason_code="permission_granted",
         required_permission="vm.stop",
-        role_code=current_user.role.code,
+        role_code=cloud_role_code(current_user, "aws"),
         event_type="operation",
         http_method=request.method,
         request_path=request.url.path,
@@ -1210,7 +1208,7 @@ def execute_aws_stop_action(
     try:
         stop_aws_instance(
             resource.cloud_resource_id,
-            current_user.role.code,
+            cloud_role_code(current_user, "aws"),
         )
 
         mark_operation_success(
@@ -1248,7 +1246,7 @@ def execute_aws_stop_action(
             decision="allowed",
             reason_code="cloud_operation_failed",
             required_permission="vm.stop",
-            role_code=current_user.role.code,
+            role_code=cloud_role_code(current_user, "aws"),
             event_type="operation_failure",
             http_method=request.method,
             request_path=request.url.path,
@@ -1312,7 +1310,7 @@ def execute_azure_delete_action(
         decision="allowed",
         reason_code="permission_granted",
         required_permission="vm.delete",
-        role_code=current_user.role.code,
+        role_code=cloud_role_code(current_user, "azure"),
         event_type="operation",
         http_method=request.method,
         request_path=request.url.path,
@@ -1324,7 +1322,7 @@ def execute_azure_delete_action(
     try:
         delete_virtual_machine(
             resource.cloud_resource_id,
-            current_user.role.code,
+            cloud_role_code(current_user, "azure"),
         )
 
         mark_operation_success(
@@ -1362,7 +1360,7 @@ def execute_azure_delete_action(
             decision="allowed",
             reason_code="cloud_operation_failed",
             required_permission="vm.delete",
-            role_code=current_user.role.code,
+            role_code=cloud_role_code(current_user, "azure"),
             event_type="operation_failure",
             http_method=request.method,
             request_path=request.url.path,
@@ -1425,7 +1423,7 @@ def execute_aws_delete_action(
         decision="allowed",
         reason_code="permission_granted",
         required_permission="vm.delete",
-        role_code=current_user.role.code,
+        role_code=cloud_role_code(current_user, "aws"),
         event_type="operation",
         http_method=request.method,
         request_path=request.url.path,
@@ -1437,7 +1435,7 @@ def execute_aws_delete_action(
     try:
         instance_state = get_aws_instance_state_by_id(
             resource.cloud_resource_id,
-            current_user.role.code,
+            cloud_role_code(current_user, "aws"),
         )
 
         if instance_state not in {
@@ -1448,7 +1446,7 @@ def execute_aws_delete_action(
             try:
                 terminate_aws_instance(
                     resource.cloud_resource_id,
-                    current_user.role.code,
+                    cloud_role_code(current_user, "aws"),
                 )
             except AWSCloudError as exc:
                 if exc.code != "aws_instance_not_found":
@@ -1493,7 +1491,7 @@ def execute_aws_delete_action(
             decision="allowed",
             reason_code="cloud_operation_failed",
             required_permission="vm.delete",
-            role_code=current_user.role.code,
+            role_code=cloud_role_code(current_user, "aws"),
             event_type="operation_failure",
             http_method=request.method,
             request_path=request.url.path,
@@ -1579,12 +1577,25 @@ def _refresh_resource_status_from_cloud(
     status_code=status.HTTP_200_OK,
 )
 def list_instances(
-    current_user: CanReadInstances,
+    current_user: CurrentUser,
     db: DatabaseSession,
 ) -> list[ManagedResource]:
+    # Only clouds the caller can read are listed; with no cloud access at all
+    # the list is simply empty rather than an error.
+    readable = [
+        provider
+        for provider in CLOUD_PROVIDERS
+        if has_cloud_permission(current_user, provider, "vm.read")
+    ]
+    if not readable:
+        return []
+
     statement = (
         select(ManagedResource)
-        .where(ManagedResource.is_managed.is_(True))
+        .where(
+            ManagedResource.is_managed.is_(True),
+            ManagedResource.provider.in_(readable),
+        )
         .order_by(
             ManagedResource.provider,
             ManagedResource.name,
@@ -1596,7 +1607,7 @@ def list_instances(
     for resource in resources:
         _refresh_resource_status_from_cloud(
             resource,
-            current_user.role.code,
+            cloud_role_code(current_user, resource.provider),
         )
 
     db.commit()
@@ -1617,7 +1628,7 @@ def list_instances(
 def create_aws_managed_instance(
     request: Request,
     payload: AWSInstanceCreateRequest,
-    current_user: CanCreateInstances,
+    current_user: CanCreateAwsInstances,
     db: DatabaseSession,
 ) -> AWSInstanceCreateResponse:
     return execute_aws_create_action(
@@ -1641,7 +1652,7 @@ def create_aws_managed_instance(
 def create_azure_managed_instance(
     request: Request,
     payload: AzureInstanceCreateRequest,
-    current_user: CanCreateInstances,
+    current_user: CanCreateAzureInstances,
     db: DatabaseSession,
 ) -> AzureInstanceCreateResponse:
     return execute_azure_create_action(
@@ -1663,7 +1674,7 @@ def create_azure_managed_instance(
     status_code=status.HTTP_200_OK,
 )
 def list_live_aws_instances(
-    current_user: CanReadInstances,
+    current_user: CanReadAwsInventory,
 ) -> list[dict[str, str | None]]:
     """
     Return the current AWS EC2 inventory visible to the authenticated
@@ -1674,7 +1685,7 @@ def list_live_aws_instances(
     """
     try:
         return list_aws_instances(
-            current_user.role.code,
+            cloud_role_code(current_user, "aws"),
         )
 
     except AWSCloudError as exc:
@@ -1709,14 +1720,14 @@ def get_instance_status(
     if provider is CloudProvider.AZURE:
         real_status = get_virtual_machine_power_state(
             resource.cloud_resource_id,
-            current_user.role.code,
+            cloud_role_code(current_user, provider.value),
         )
 
     elif provider is CloudProvider.AWS:
         try:
             real_status = get_aws_instance_state(
                 resource.cloud_resource_id,
-                current_user.role.code,
+                cloud_role_code(current_user, provider.value),
             )
 
         except AWSCloudError as exc:
@@ -1728,10 +1739,7 @@ def get_instance_status(
         if real_status is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=(
-                    "AWS EC2 instance not found or "
-                    "not managed by the platform."
-                ),
+                detail=("AWS EC2 instance not found or not managed by the platform."),
             )
 
     return InstanceStatusResponse(
@@ -1764,10 +1772,7 @@ def start_instance(
         resource_id,
     )
 
-    if (
-        provider is CloudProvider.AZURE
-        and settings.azure_write_enabled
-    ):
+    if provider is CloudProvider.AZURE and settings.azure_write_enabled:
         return execute_azure_start_action(
             request=request,
             db=db,
@@ -1775,10 +1780,7 @@ def start_instance(
             current_user=current_user,
         )
 
-    if (
-        provider is CloudProvider.AWS
-        and settings.aws_write_enabled
-    ):
+    if provider is CloudProvider.AWS and settings.aws_write_enabled:
         return execute_aws_start_action(
             request=request,
             db=db,
@@ -1819,10 +1821,7 @@ def stop_instance(
         resource_id,
     )
 
-    if (
-        provider is CloudProvider.AZURE
-        and settings.azure_write_enabled
-    ):
+    if provider is CloudProvider.AZURE and settings.azure_write_enabled:
         return execute_azure_stop_action(
             request=request,
             db=db,
@@ -1830,10 +1829,7 @@ def stop_instance(
             current_user=current_user,
         )
 
-    if (
-        provider is CloudProvider.AWS
-        and settings.aws_write_enabled
-    ):
+    if provider is CloudProvider.AWS and settings.aws_write_enabled:
         return execute_aws_stop_action(
             request=request,
             db=db,
@@ -1874,10 +1870,7 @@ def delete_instance(
         resource_id,
     )
 
-    if (
-        provider is CloudProvider.AZURE
-        and settings.azure_write_enabled
-    ):
+    if provider is CloudProvider.AZURE and settings.azure_write_enabled:
         return execute_azure_delete_action(
             request=request,
             db=db,
@@ -1885,10 +1878,7 @@ def delete_instance(
             current_user=current_user,
         )
 
-    if (
-        provider is CloudProvider.AWS
-        and settings.aws_write_enabled
-    ):
+    if provider is CloudProvider.AWS and settings.aws_write_enabled:
         return execute_aws_delete_action(
             request=request,
             db=db,

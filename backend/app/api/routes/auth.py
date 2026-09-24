@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.core.security import create_access_token, hash_password, verify_password
 from app.db.models import LoginChallenge, Role, User
 from app.schemas.auth import (
+    CloudAccessResponse,
     CurrentUserResponse,
     LoginChallengeResponse,
     LoginRequest,
@@ -316,11 +317,26 @@ def read_current_user(
 ) -> CurrentUserResponse:
     statement = (
         select(User)
-        .options(joinedload(User.role).joinedload(Role.permissions))
+        .options(
+            joinedload(User.role).joinedload(Role.permissions),
+            joinedload(User.azure_role).joinedload(Role.permissions),
+            joinedload(User.aws_role).joinedload(Role.permissions),
+        )
         .where(User.id == current_user.id)
     )
 
     user = db.execute(statement).unique().scalar_one()
+
+    def access(role: Role | None) -> CloudAccessResponse | None:
+        if role is None:
+            return None
+        return CloudAccessResponse(
+            role_code=role.code,
+            role_name=role.name,
+            permissions=sorted(
+                p.code for p in role.permissions if p.code.startswith("vm.")
+            ),
+        )
 
     return CurrentUserResponse(
         id=user.id,
@@ -330,4 +346,5 @@ def read_current_user(
         role_code=user.role.code,
         role_name=user.role.name,
         permissions=sorted(permission.code for permission in user.role.permissions),
+        cloud_access={"azure": access(user.azure_role), "aws": access(user.aws_role)},
     )

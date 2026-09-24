@@ -21,8 +21,8 @@ export function useManagedInstances() {
   });
 }
 
-export function useLiveAwsInstances() {
-  const enabled = Boolean(getAccessToken());
+export function useLiveAwsInstances({ enabled: allowed = true }: { enabled?: boolean } = {}) {
+  const enabled = allowed && Boolean(getAccessToken());
   return useQuery({
     queryKey: instanceKeys.liveAws(),
     queryFn: getLiveAwsInstances,

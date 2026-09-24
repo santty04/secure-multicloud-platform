@@ -13,6 +13,10 @@ export interface MockUser extends CurrentUserResponse {
 /** Password for all three demo accounts (mock-only convenience). */
 const DEMO_PASSWORD = "demo1234";
 
+const VIEWER_VM = ["vm.read"];
+const OPERATOR_VM = ["vm.read", "vm.start", "vm.stop"];
+const ADMIN_VM = ["vm.create", "vm.delete", "vm.read", "vm.start", "vm.stop", "vm.update"];
+
 export const MOCK_USERS: MockUser[] = [
   {
     id: "a1000000-0000-4000-8000-000000000001",
@@ -23,6 +27,10 @@ export const MOCK_USERS: MockUser[] = [
     role_code: "viewer",
     role_name: "Viewer",
     permissions: ["vm.read", "operation.read"],
+    cloud_access: {
+      azure: { role_code: "viewer", role_name: "Viewer", permissions: VIEWER_VM },
+      aws: { role_code: "viewer", role_name: "Viewer", permissions: VIEWER_VM },
+    },
   },
   {
     id: "a1000000-0000-4000-8000-000000000002",
@@ -33,6 +41,11 @@ export const MOCK_USERS: MockUser[] = [
     role_code: "operator",
     role_name: "Operador",
     permissions: ["vm.read", "vm.start", "vm.stop", "operation.read"],
+    // Mixed access, to demo per-cloud rules: operates Azure, only reads AWS.
+    cloud_access: {
+      azure: { role_code: "operator", role_name: "Operador", permissions: OPERATOR_VM },
+      aws: { role_code: "viewer", role_name: "Viewer", permissions: VIEWER_VM },
+    },
   },
   {
     id: "a1000000-0000-4000-8000-000000000003",
@@ -52,6 +65,10 @@ export const MOCK_USERS: MockUser[] = [
       "operation.read",
       "user.manage",
     ],
+    cloud_access: {
+      azure: { role_code: "administrator", role_name: "Administrador", permissions: ADMIN_VM },
+      aws: { role_code: "administrator", role_name: "Administrador", permissions: ADMIN_VM },
+    },
   },
 ];
 
@@ -75,5 +92,6 @@ export function toCurrentUserResponse(user: MockUser): CurrentUserResponse {
     role_code: user.role_code,
     role_name: user.role_name,
     permissions: user.permissions,
+    cloud_access: user.cloud_access,
   };
 }

@@ -36,6 +36,12 @@ def serialize_user(user: User) -> UserResponse:
         role_id=user.role_id,
         role_code=user.role.code,
         role_name=user.role.name,
+        azure_role_id=user.azure_role_id,
+        azure_role_code=user.azure_role.code if user.azure_role else None,
+        azure_role_name=user.azure_role.name if user.azure_role else None,
+        aws_role_id=user.aws_role_id,
+        aws_role_code=user.aws_role.code if user.aws_role else None,
+        aws_role_name=user.aws_role.name if user.aws_role else None,
         created_at=user.created_at,
     )
 
@@ -61,6 +67,20 @@ def find_role(db: DatabaseSession, role_id: uuid.UUID) -> Role:
     role = db.get(Role, role_id)
     if role is None:
         raise HTTPException(422, "Selected role does not exist.")
+    return role
+
+
+# Only these roles have a cloud identity (Azure managed identity / AWS IAM
+# role) to act with; any other role assigned to a cloud would fail at runtime.
+CLOUD_ROLE_CODES = {"viewer", "operator", "administrator"}
+
+
+def find_cloud_role(db: DatabaseSession, role_id: uuid.UUID | None) -> Role | None:
+    if role_id is None:
+        return None
+    role = find_role(db, role_id)
+    if role.code not in CLOUD_ROLE_CODES:
+        raise HTTPException(422, "Ese rol no se puede asignar como acceso a una nube.")
     return role
 
 
@@ -110,7 +130,11 @@ def list_users(
     total = db.scalar(select(func.count()).select_from(User).where(*filters))
     users = db.scalars(
         select(User)
-        .options(joinedload(User.role))
+        .options(
+            joinedload(User.role),
+            joinedload(User.azure_role),
+            joinedload(User.aws_role),
+        )
         .where(*filters)
         .order_by(User.created_at.desc(), User.id)
         .offset(offset)
@@ -151,6 +175,8 @@ def create_user(
         email=payload.email,
         full_name=payload.full_name,
         role=role,
+        azure_role=find_cloud_role(db, payload.azure_role_id),
+        aws_role=find_cloud_role(db, payload.aws_role_id),
         is_active=payload.is_active,
         # No admin-chosen password: the user sets their own via the
         # one-time activation link, so this hash must never validate.
@@ -197,6 +223,8 @@ def update_user(
     user.email = payload.email
     user.full_name = payload.full_name
     user.role = role
+    user.azure_role = find_cloud_role(db, payload.azure_role_id)
+    user.aws_role = find_cloud_role(db, payload.aws_role_id)
     user.is_active = payload.is_active
     return save_user(db, user)
 

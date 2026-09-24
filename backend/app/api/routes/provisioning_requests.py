@@ -12,7 +12,12 @@ from app.ai.errors import (
     AIPolicyViolationError,
     AIServiceUnavailableError,
 )
-from app.api.dependencies import DatabaseSession, require_permission
+from app.api.dependencies import (
+    DatabaseSession,
+    clouds_with_permission,
+    ensure_cloud_permission,
+    require_any_cloud_permission,
+)
 from app.api.routes.instances import (
     execute_aws_create_action,
     execute_azure_create_action,
@@ -46,9 +51,12 @@ router = APIRouter(
 )
 
 
+# Requests end in a VM being created, so they follow the caller's vm.create
+# access per cloud: entering the feature needs it in at least one cloud, and
+# each request is only visible or actionable to users who can create there.
 CanManageProvisioningRequests = Annotated[
     User,
-    Depends(require_permission("vm.create")),
+    Depends(require_any_cloud_permission("vm.create")),
 ]
 
 
@@ -88,13 +96,18 @@ async def create_provisioning_request(
     current_user: CanManageProvisioningRequests,
     db: DatabaseSession,
 ) -> ProvisioningRequestResponse:
+    creatable = clouds_with_permission(current_user, "vm.create")
+    if payload.provider_preference is None and len(creatable) == 1:
+        # Steer the advisor to the only cloud this user may create in.
+        payload = payload.model_copy(update={"provider_preference": creatable[0]})
+    elif payload.provider_preference is not None:
+        ensure_cloud_permission(current_user, payload.provider_preference, "vm.create")
+
     try:
-        provisioning_request = (
-            await create_provisioning_request_from_advisor(
-                db,
-                payload=payload,
-                current_user=current_user,
-            )
+        provisioning_request = await create_provisioning_request_from_advisor(
+            db,
+            payload=payload,
+            current_user=current_user,
         )
 
     except AIConfigurationError as exc:
@@ -120,6 +133,13 @@ async def create_provisioning_request(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="AI recommendation violated platform policy.",
         ) from exc
+
+    if provisioning_request.provider not in creatable:
+        # The advisor picked a cloud the caller has no create access to.
+        db.rollback()
+        ensure_cloud_permission(
+            current_user, provisioning_request.provider, "vm.create"
+        )
 
     _commit_and_refresh(
         db,
@@ -152,12 +172,11 @@ def read_provisioning_requests(
         Query(ge=1, le=500),
     ] = 100,
 ) -> list[ProvisioningRequestResponse]:
-    del current_user
-
     provisioning_requests = list_provisioning_requests(
         db,
         status=request_status,
         provider=provider,
+        providers=clouds_with_permission(current_user, "vm.create"),
         limit=limit,
     )
 
@@ -177,12 +196,13 @@ def read_provisioning_request(
     current_user: CanManageProvisioningRequests,
     db: DatabaseSession,
 ) -> ProvisioningRequestResponse:
-    del current_user
-
     try:
         provisioning_request = get_provisioning_request(
             db,
             request_id=request_id,
+        )
+        ensure_cloud_permission(
+            current_user, provisioning_request.provider, "vm.create"
         )
 
     except ProvisioningRequestNotFoundError as exc:
@@ -208,6 +228,9 @@ def approve_request(
         provisioning_request = get_provisioning_request(
             db,
             request_id=request_id,
+        )
+        ensure_cloud_permission(
+            current_user, provisioning_request.provider, "vm.create"
         )
 
         provisioning_request = approve_provisioning_request(
@@ -249,6 +272,9 @@ def reject_request(
             db,
             request_id=request_id,
         )
+        ensure_cloud_permission(
+            current_user, provisioning_request.provider, "vm.create"
+        )
 
         provisioning_request = reject_provisioning_request(
             db,
@@ -271,14 +297,14 @@ def reject_request(
     return ProvisioningRequestResponse.model_validate(
         provisioning_request,
     )
+
+
 def _validate_executable_provisioning_request(
     provisioning_request: ProvisioningRequest,
 ) -> None:
     catalog = get_infrastructure_catalog()
 
-    provider_catalog = catalog.get(
-        provisioning_request.provider
-    )
+    provider_catalog = catalog.get(provisioning_request.provider)
 
     if provider_catalog is None:
         raise HTTPException(
@@ -316,10 +342,7 @@ def _validate_executable_provisioning_request(
             detail="Provisioning region is outside the current catalog.",
         )
 
-    if (
-        provisioning_request.instance_type
-        not in provider_catalog["instance_types"]
-    ):
+    if provisioning_request.instance_type not in provider_catalog["instance_types"]:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Instance type is outside the current catalog.",
@@ -364,9 +387,9 @@ def execute_provisioning_request(
             detail="Provisioning request not found.",
         ) from exc
 
-    _validate_executable_provisioning_request(
-        provisioning_request
-    )
+    ensure_cloud_permission(current_user, provisioning_request.provider, "vm.create")
+
+    _validate_executable_provisioning_request(provisioning_request)
 
     provisioning_request.status = "executing"
     provisioning_request.execution_started_at = datetime.now(UTC)
@@ -382,13 +405,10 @@ def execute_provisioning_request(
         None,
     )
 
-    request.state.correlation_id = str(
-        provisioning_request.correlation_id
-    )
+    request.state.correlation_id = str(provisioning_request.correlation_id)
 
     resource_name = (
-        f"smp-{provisioning_request.provider}-"
-        f"{provisioning_request.id.hex[:8]}"
+        f"smp-{provisioning_request.provider}-{provisioning_request.id.hex[:8]}"
     )
 
     try:
@@ -428,8 +448,7 @@ def execute_provisioning_request(
 
         operation = db.scalar(
             select(Operation).where(
-                Operation.correlation_id
-                == provisioning_request.correlation_id
+                Operation.correlation_id == provisioning_request.correlation_id
             )
         )
 
@@ -450,15 +469,12 @@ def execute_provisioning_request(
         db.commit()
         db.refresh(provisioning_request)
 
-        return ProvisioningRequestResponse.model_validate(
-            provisioning_request
-        )
+        return ProvisioningRequestResponse.model_validate(provisioning_request)
 
     except HTTPException as exc:
         operation = db.scalar(
             select(Operation).where(
-                Operation.correlation_id
-                == provisioning_request.correlation_id
+                Operation.correlation_id == provisioning_request.correlation_id
             )
         )
 

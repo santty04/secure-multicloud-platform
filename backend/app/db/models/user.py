@@ -52,6 +52,22 @@ class User(Base):
         index=True,
     )
 
+    # Per-cloud access: the role applied to that provider's virtual machines
+    # (and the cloud identity used to act there). NULL means no access.
+    azure_role_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("roles.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+
+    aws_role_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("roles.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -67,4 +83,9 @@ class User(Base):
 
     role: Mapped["Role"] = relationship(
         back_populates="users",
+        foreign_keys=[role_id],
     )
+
+    azure_role: Mapped["Role | None"] = relationship(foreign_keys=[azure_role_id])
+
+    aws_role: Mapped["Role | None"] = relationship(foreign_keys=[aws_role_id])

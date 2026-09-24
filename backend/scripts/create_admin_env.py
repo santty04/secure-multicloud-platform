@@ -35,6 +35,8 @@ def main() -> None:
                 password_hash=password_hash,
                 is_active=True,
                 role_id=role.id,
+                azure_role_id=role.id,
+                aws_role_id=role.id,
             )
             db.add(user)
             print(f"Administrator created: {email}")
@@ -43,6 +45,8 @@ def main() -> None:
             user.password_hash = password_hash
             user.is_active = True
             user.role_id = role.id
+            user.azure_role_id = role.id
+            user.aws_role_id = role.id
             print(f"Administrator updated: {email}")
 
         db.commit()

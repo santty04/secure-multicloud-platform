@@ -33,6 +33,8 @@ def create_user_with_permissions(
         password_hash="not-used-in-rbac-unit-tests",
         is_active=True,
         role=role,
+        azure_role=role,
+        aws_role=role,
     )
 
 
