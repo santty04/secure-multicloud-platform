@@ -176,6 +176,27 @@ def test_email_delivery_failure_surfaces_502(client, accounts, monkeypatch):
     assert response.status_code == 502
 
 
+def test_create_user_does_not_accept_password(client, accounts):
+    admin, viewer = accounts
+    # The frontend no longer sends a password: creation must succeed without it.
+    assert (
+        client.post(
+            "/api/v1/users", headers=headers(admin), json=payload(viewer.role_id)
+        ).status_code
+        == 201
+    )
+    # Passwords are set by the invited user only, never by the admin.
+    response = client.post(
+        "/api/v1/users",
+        headers=headers(admin),
+        json=payload(
+            viewer.role_id, email="other@example.com", password="NewPassword123!"
+        ),
+    )
+    assert response.status_code == 422
+    assert "NewPassword123!" not in response.text
+
+
 def test_duplicate_email_and_invalid_inputs(client, accounts):
     admin, viewer = accounts
     for changes, status in [
