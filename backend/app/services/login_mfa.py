@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import secrets
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select, update
@@ -91,24 +92,34 @@ def _pending_challenge(
     return challenge, user
 
 
+@dataclass(frozen=True)
+class CodeCheck:
+    """Result of a code attempt; `user` is known whenever the challenge was live."""
+
+    user: User | None
+    accepted: bool = False
+    locked: bool = False
+
+
 def verify_login_challenge(
     db: Session, challenge_id: uuid.UUID, code: str
-) -> User | None:
+) -> CodeCheck:
     """Check `code`; every call counts as an attempt, so the caller must commit."""
     found = _pending_challenge(db, challenge_id)
     if found is None:
-        return None
+        return CodeCheck(user=None)
 
     challenge, user = found
     challenge.attempts += 1
 
     if hmac.compare_digest(challenge.code_hash, _hash_code(challenge.id, code)):
         challenge.consumed_at = datetime.now(UTC)
-        return user
+        return CodeCheck(user=user, accepted=True)
 
-    if challenge.attempts >= settings.login_code_max_attempts:
+    locked = challenge.attempts >= settings.login_code_max_attempts
+    if locked:
         challenge.consumed_at = datetime.now(UTC)
-    return None
+    return CodeCheck(user=user, locked=locked)
 
 
 def reissue_login_code(

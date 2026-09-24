@@ -1,4 +1,5 @@
 from app.db.models.audit_log import AuditLog
+from app.db.models.auth_event import AuthEvent
 from app.db.models.login_challenge import LoginChallenge
 from app.db.models.managed_resource import ManagedResource
 from app.db.models.operation import Operation
@@ -10,6 +11,7 @@ from app.db.models.user import User
 
 __all__ = [
     "AuditLog",
+    "AuthEvent",
     "LoginChallenge",
     "ManagedResource",
     "Operation",
