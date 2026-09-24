@@ -18,8 +18,8 @@ const message = (error: unknown) => isApiError(error) ? error.message : "No se p
 const NO_ACCESS = "";
 const cloudRoleId = (value: FormDataEntryValue | null) => (value ? String(value) : null);
 
-function CloudRoleSelect({ name, label, value, roles }: { name: string; label: string; value: string | null | undefined; roles: ManagedRole[] }) {
-  return <label className="block space-y-1 text-sm">{label}<select name={name} defaultValue={value ?? NO_ACCESS} className={fieldClass}>
+function CloudRoleSelect({ name, label, value, roles, locked }: { name: string; label: string; value: string | null | undefined; roles: ManagedRole[]; locked?: boolean }) {
+  return <label className="block space-y-1 text-sm">{label}<select name={name} defaultValue={value ?? NO_ACCESS} disabled={locked} className={fieldClass}>
     <option value={NO_ACCESS}>Sin acceso</option>
     {roles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}
   </select></label>;
@@ -47,7 +47,9 @@ function UserForm({ user, roles, ownId, onClose, onSaved }: {
       await saveUser(user?.id, {
         full_name: String(data.get("full_name")).trim(), email: String(data.get("email")).trim(),
         role_id: String(data.get("role_id")), is_active: ownAccount || data.get("is_active") === "on",
-        azure_role_id: cloudRoleId(data.get("azure_role_id")), aws_role_id: cloudRoleId(data.get("aws_role_id")),
+        // Disabled selects are left out of FormData: keep your own access as is.
+        azure_role_id: ownAccount ? user!.azure_role_id : cloudRoleId(data.get("azure_role_id")),
+        aws_role_id: ownAccount ? user!.aws_role_id : cloudRoleId(data.get("aws_role_id")),
       });
       toast.success(user ? "Usuario actualizado" : "Usuario creado. Se envió un correo para que defina su contraseña.");
       await onSaved(); onClose();
@@ -68,9 +70,10 @@ function UserForm({ user, roles, ownId, onClose, onSaved }: {
             {roles.map(role => <option key={role.id} value={role.id} disabled={ownAccount && !role.permissions.includes("user.manage")}>{role.name}</option>)}
           </select></label>
           <div className="grid gap-4 sm:grid-cols-2">
-            <CloudRoleSelect name="azure_role_id" label="Acceso a Azure" value={user?.azure_role_id} roles={cloudRoles} />
-            <CloudRoleSelect name="aws_role_id" label="Acceso a AWS" value={user?.aws_role_id} roles={cloudRoles} />
+            <CloudRoleSelect name="azure_role_id" label="Acceso a Azure" value={user?.azure_role_id} roles={cloudRoles} locked={ownAccount} />
+            <CloudRoleSelect name="aws_role_id" label="Acceso a AWS" value={user?.aws_role_id} roles={cloudRoles} locked={ownAccount} />
           </div>
+          {ownAccount && <p className="text-xs text-smp-ink-muted">No puedes cambiar tu propio acceso a las nubes; pídeselo a otro administrador.</p>}
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="is_active" defaultChecked={user?.is_active ?? true} disabled={ownAccount} />Cuenta activa</label>
         </fieldset>
         {error && <p role="alert" className="text-sm text-smp-danger-text">{error}</p>}

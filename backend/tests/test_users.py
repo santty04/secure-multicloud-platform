@@ -305,6 +305,49 @@ def test_manager_cannot_lock_self_out(client, accounts):
     assert result.status_code == 200 and result.json()["full_name"] == "Updated Name"
 
 
+def test_manager_cannot_change_own_cloud_access(client, accounts, db_session):
+    admin, viewer = accounts
+    # Both fixture roles have a cloud identity (administrator / viewer codes).
+    admin.azure_role = viewer.role
+    db_session.flush()
+
+    for changes in [
+        {"azure_role_id": str(admin.role_id)},  # escalate own Azure access
+        {"aws_role_id": str(admin.role_id)},  # grant own AWS access
+        {"azure_role_id": None},  # even dropping it must go through a peer
+    ]:
+        result = client.put(
+            f"/api/v1/users/{admin.id}",
+            headers=headers(admin),
+            json=update_payload(admin, **changes),
+        )
+        assert result.status_code == 409
+        assert "acceso a las nubes" in result.json()["error"]["message"]
+
+    db_session.refresh(admin)
+    assert admin.azure_role_id == viewer.role_id and admin.aws_role_id is None
+
+    # Unchanged cloud access still lets the manager edit other own fields.
+    assert (
+        client.put(
+            f"/api/v1/users/{admin.id}",
+            headers=headers(admin),
+            json=update_payload(admin, full_name="Still Me"),
+        ).status_code
+        == 200
+    )
+
+    # Another user's cloud access remains editable.
+    assert (
+        client.put(
+            f"/api/v1/users/{viewer.id}",
+            headers=headers(admin),
+            json=update_payload(viewer, aws_role_id=str(admin.role_id)),
+        ).status_code
+        == 200
+    )
+
+
 def test_update_duplicate_and_unknown_user(client, accounts):
     admin, viewer = accounts
     result = client.put(
