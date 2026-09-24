@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { AppHeader } from "@/components/layout/app-header";
@@ -15,7 +15,7 @@ const mocksEnabled = process.env.NEXT_PUBLIC_ENABLE_MOCKS === "true";
 function ShellSkeleton() {
   return (
     <div className="flex min-h-screen bg-smp-bg">
-      <aside className="sticky top-0 flex h-screen w-[236px] flex-none flex-col gap-2 border-r border-smp-line-soft bg-smp-surface-raised px-3 py-4">
+      <aside className="sticky top-0 hidden h-screen w-[236px] flex-none flex-col md:flex gap-2 border-r border-smp-line-soft bg-smp-surface-raised px-3 py-4">
         <div className="mb-3 flex items-center gap-2.5 border-b border-smp-line-soft px-1.5 pb-4">
           <Skeleton className="size-[30px] rounded-[9px]" />
           <Skeleton className="h-4 w-28" />
@@ -25,13 +25,13 @@ function ShellSkeleton() {
         ))}
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 items-center gap-3.5 border-b border-smp-line-soft bg-smp-surface-raised px-[22px]">
+        <header className="flex h-14 items-center gap-3.5 border-b border-smp-line-soft bg-smp-surface-raised px-4 md:px-[22px]">
           <Skeleton className="h-4 w-40" />
           <div className="flex-1" />
           <Skeleton className="h-6 w-32 rounded-full" />
           <Skeleton className="h-7 w-28 rounded-[10px]" />
         </header>
-        <main className="flex-1 px-[22px] pt-6 pb-16">
+        <main className="flex-1 px-4 pt-5 pb-16 md:px-[22px] md:pt-6">
           <Skeleton className="h-40 w-full max-w-[1500px] rounded-2xl" />
         </main>
       </div>
@@ -41,6 +41,8 @@ function ShellSkeleton() {
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
   const hasToken = useHasAccessToken();
   const { data: user, isPending, isError, error } = useCurrentUser({ enabled: hasToken === true });
   const isUnauthenticated = isError && isApiError(error) && error.status === 401;
@@ -82,18 +84,18 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-smp-bg">
-      <AppSidebar />
+      <AppSidebar mobileOpen={mobileNavOpen} onMobileClose={closeMobileNav} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <AppHeader />
+        <AppHeader menuOpen={mobileNavOpen} onMenuClick={() => setMobileNavOpen(true)} />
         {mocksEnabled && (
-          <div className="flex items-center gap-2.5 border-b border-smp-warning/22 bg-smp-warning/8 px-[22px] py-2 text-[12px] text-smp-warning-ink">
+          <div className="flex items-center gap-2.5 border-b border-smp-warning/22 bg-smp-warning/8 px-4 py-2 md:px-[22px] text-[12px] text-smp-warning-ink">
             <AlertTriangle className="size-3.5 flex-none" strokeWidth={2} />
             <span>
               <strong className="font-semibold">Modo demostración:</strong> datos servidos por mocks (MSW).
             </span>
           </div>
         )}
-        <main className="min-w-0 flex-1 px-[22px] pt-6 pb-16">{children}</main>
+        <main className="min-w-0 flex-1 px-4 pt-5 pb-16 md:px-[22px] md:pt-6">{children}</main>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowLeft } from "lucide-react";
+import { AuthMobileBrand } from "@/components/auth/auth-hero-panel";
 import { useResendLoginCode, useVerifyLoginCode } from "@/features/auth/hooks";
 import { isApiError } from "@/lib/api/errors";
 import type { LoginChallenge } from "@/schemas/auth";
@@ -63,6 +64,7 @@ export function LoginCodeStep({ challenge: initial, onBack }: { challenge: Login
 
   return (
     <div className="w-full max-w-[392px]">
+      <AuthMobileBrand />
       <button
         type="button"
         onClick={onBack}

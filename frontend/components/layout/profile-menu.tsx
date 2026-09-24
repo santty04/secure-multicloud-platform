@@ -35,15 +35,15 @@ export function ProfileMenu() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-[10px] border border-transparent bg-transparent py-[5px] pr-2 pl-[5px] text-smp-ink transition-colors hover:border-smp-line hover:bg-smp-surface-alt">
+      <DropdownMenuTrigger aria-label={`Perfil de ${user.fullName}`} className="flex items-center gap-2.5 rounded-[10px] border border-transparent bg-transparent py-[5px] pr-[5px] pl-[5px] sm:pr-2 text-smp-ink transition-colors hover:border-smp-line hover:bg-smp-surface-alt">
         <span className="flex size-7 flex-none items-center justify-center rounded-full border border-smp-line-2 bg-smp-line-soft text-[11px] font-bold text-smp-accent-soft">
           {initialsOf(user.fullName)}
         </span>
-        <span className="text-left leading-[1.25]">
+        <span className="hidden text-left leading-[1.25] sm:block">
           <span className="block text-[12.5px] font-semibold">{user.fullName}</span>
           <span className="block text-[10.5px] text-smp-ink-dim">{user.roleName}</span>
         </span>
-        <ChevronDown className="size-3.5 text-smp-ink-dim" />
+        <ChevronDown className="hidden size-3.5 text-smp-ink-dim sm:block" />
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"

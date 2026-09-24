@@ -19,10 +19,10 @@ export function BackendStatusChip() {
     <button
       type="button"
       onClick={() => health.refetch()}
-      title="Comprobar estado del servicio"
-      aria-label="Comprobar estado del servicio"
+      title={`${label} · Comprobar estado del servicio`}
+      aria-label={`${label}. Comprobar estado del servicio`}
       className={cn(
-        "flex items-center gap-2 rounded-full border px-[11px] py-[5px] text-[11.5px] font-semibold transition-colors",
+        "flex items-center gap-2 rounded-full border px-[9px] py-[9px] sm:px-[11px] sm:py-[5px] text-[11.5px] font-semibold transition-colors",
         health.isPending
           ? "border-smp-line-2 bg-smp-surface-alt text-smp-ink-dim"
           : isDown
@@ -37,7 +37,7 @@ export function BackendStatusChip() {
           health.isPending ? "bg-smp-ink-dim" : isDown ? "bg-smp-danger" : "bg-smp-success",
         )}
       />
-      <span>{label}</span>
+      <span className="hidden sm:inline">{label}</span>
     </button>
   );
 }
