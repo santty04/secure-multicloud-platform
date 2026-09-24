@@ -11,13 +11,14 @@ import type { CloudProvider } from "@/types/domain";
 import { instanceKeys } from "./keys";
 
 /** GET /api/v1/instances has no server-side filters — search/provider/status are applied on the client. */
-export function useManagedInstances() {
+export function useManagedInstances(options: { refetchInterval?: number } = {}) {
   const enabled = Boolean(getAccessToken());
   return useQuery({
     queryKey: instanceKeys.managed(),
     queryFn: getManagedInstances,
     enabled,
     staleTime: 30_000,
+    refetchInterval: options.refetchInterval,
   });
 }
 

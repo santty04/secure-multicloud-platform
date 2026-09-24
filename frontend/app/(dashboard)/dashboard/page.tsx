@@ -15,10 +15,13 @@ import { SecurityActivity } from "@/components/dashboard/security-activity";
 import { formatDate } from "@/lib/utils/format-date";
 import { isApiError, networkError } from "@/lib/api/errors";
 
+// React Query pauses the interval while the tab is in the background.
+const REFRESH_INTERVAL_MS = 30_000;
+
 export default function DashboardPage() {
-  const instancesQuery = useInstances();
-  const operationsQuery = useOperations();
-  const auditQuery = useAuditLogs();
+  const instancesQuery = useInstances({ refetchInterval: REFRESH_INTERVAL_MS });
+  const operationsQuery = useOperations({ refetchInterval: REFRESH_INTERVAL_MS });
+  const auditQuery = useAuditLogs({ refetchInterval: REFRESH_INTERVAL_MS });
 
   const rawError = instancesQuery.error ?? operationsQuery.error ?? auditQuery.error;
   const isLoading = instancesQuery.isPending || operationsQuery.isPending || auditQuery.isPending;
@@ -48,6 +51,12 @@ export default function DashboardPage() {
   const operations = operationsQuery.data;
   const auditLogs = auditQuery.data;
 
+  // Oldest of the three fetches: every figure on the page is at least this fresh.
+  const lastSync = new Date(
+    Math.min(instancesQuery.dataUpdatedAt, operationsQuery.dataUpdatedAt, auditQuery.dataUpdatedAt),
+  );
+  const isRefreshing = instancesQuery.isFetching || operationsQuery.isFetching || auditQuery.isFetching;
+
   const kpis = buildKpis(instances, operations, auditLogs);
   const opsChart = buildOpsPerDayChart(operations);
   const providerSplit = buildProviderSplit(instances);
@@ -59,12 +68,17 @@ export default function DashboardPage() {
           <h1 className="m-0 mb-1 text-2xl font-semibold tracking-[-.02em]">Panel multicloud</h1>
           <p className="m-0 text-[13px] text-smp-ink-dim">
             Métricas derivadas de instancias, operaciones y registros de auditoría. Última sincronización{" "}
-            {formatDate(new Date())}.
+            {formatDate(lastSync)}.
           </p>
         </div>
         <div className="flex items-center gap-2 font-mono text-[11.5px] text-smp-ink-dim">
-          <span className="size-[7px] animate-[smp-pulse_2.4s_ease-in-out_infinite] rounded-full bg-smp-success" />
-          actualización automática
+          <span
+            className={
+              "size-[7px] rounded-full bg-smp-success" +
+              (isRefreshing ? " animate-[smp-pulse_1.2s_ease-in-out_infinite]" : "")
+            }
+          />
+          {isRefreshing ? "actualizando…" : "se actualiza cada 30 s"}
         </div>
       </div>
 

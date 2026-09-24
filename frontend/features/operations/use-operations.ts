@@ -8,12 +8,13 @@ import { toOperation } from "@/lib/api/adapters/operation";
 import { operationKeys } from "./keys";
 
 /** GET /api/v1/operations only supports `?limit=` — status/provider/action filters are applied on the client. */
-export function useOperations() {
+export function useOperations(options: { refetchInterval?: number } = {}) {
   return useQuery({
     queryKey: operationKeys.list(),
     queryFn: async () => {
       const raw = await apiFetch<unknown>(endpoints.operations());
       return operationListResponseSchema.parse(raw).map(toOperation);
     },
+    refetchInterval: options.refetchInterval,
   });
 }

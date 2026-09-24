@@ -12,12 +12,13 @@ import { auditKeys } from "./keys";
  * from the frontend. `?limit=` is the only server-side param — result,
  * user, and provider filters are applied on the client.
  */
-export function useAuditLogs() {
+export function useAuditLogs(options: { refetchInterval?: number } = {}) {
   return useQuery({
     queryKey: auditKeys.list(),
     queryFn: async () => {
       const raw = await apiFetch<unknown>(endpoints.auditLogs());
       return auditLogListResponseSchema.parse(raw).map(toAuditLog);
     },
+    refetchInterval: options.refetchInterval,
   });
 }
