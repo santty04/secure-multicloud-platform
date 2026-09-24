@@ -1,4 +1,5 @@
 import uuid
+from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -11,6 +12,23 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class LoginChallengeResponse(BaseModel):
+    mfa_required: Literal[True] = True
+    challenge_id: uuid.UUID
+    email_hint: str
+    expires_in_seconds: int
+    resend_available_in_seconds: int
+
+
+class VerifyLoginCodeRequest(BaseModel):
+    challenge_id: uuid.UUID
+    code: str = Field(pattern=r"^\d{6}$", repr=False)
+
+
+class ResendLoginCodeRequest(BaseModel):
+    challenge_id: uuid.UUID
 
 
 class TokenPayload(BaseModel):

@@ -11,13 +11,8 @@ _LINE = "#e2e8f2"
 _FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
 
 
-def render_password_setup_email(
-    *, app_name: str, full_name: str, link: str, hours: int
-) -> str:
-    app = escape(app_name)
-    name = escape(full_name)
-    href = escape(link, quote=True)
-
+def _layout(*, title: str, preheader: str, app: str, rows: str, footer: str) -> str:
+    """Wrap pre-escaped `rows` in the branded card shared by every email."""
     return f"""\
 <!DOCTYPE html>
 <html lang="es">
@@ -25,10 +20,10 @@ def render_password_setup_email(
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light">
-<title>Activa tu cuenta</title>
+<title>{title}</title>
 </head>
 <body style="margin:0;padding:0;background:{_BG};">
-<div style="display:none;max-height:0;overflow:hidden;">Define tu contraseña para empezar a usar {app}.</div>
+<div style="display:none;max-height:0;overflow:hidden;">{preheader}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:{_BG};">
   <tr>
     <td align="center" style="padding:32px 16px;">
@@ -46,6 +41,27 @@ def render_password_setup_email(
             </table>
           </td>
         </tr>
+{rows}
+        <tr>
+          <td style="padding:18px 32px;border-top:1px solid {_LINE};font-family:{_FONT};font-size:12px;line-height:1.5;color:#8a97ad;">{footer}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>
+"""
+
+
+def render_password_setup_email(
+    *, app_name: str, full_name: str, link: str, hours: int
+) -> str:
+    app = escape(app_name)
+    name = escape(full_name)
+    href = escape(link, quote=True)
+
+    rows = f"""\
         <tr>
           <td style="padding:36px 32px 8px;font-family:{_FONT};color:{_INK};">
             <h1 style="margin:0 0 16px;font-size:22px;font-weight:600;line-height:1.3;">Activa tu cuenta</h1>
@@ -66,14 +82,49 @@ def render_password_setup_email(
             <p style="margin:0 0 6px;font-size:12.5px;line-height:1.5;color:{_MUTED};">Si el botón no funciona, copia y pega este enlace en tu navegador:</p>
             <p style="margin:0;font-size:12.5px;line-height:1.5;word-break:break-all;"><a href="{href}" target="_blank" style="color:{_ACCENT};text-decoration:underline;">{href}</a></p>
           </td>
-        </tr>
+        </tr>"""
+
+    return _layout(
+        title="Activa tu cuenta",
+        preheader=f"Define tu contraseña para empezar a usar {app}.",
+        app=app,
+        rows=rows,
+        footer=(
+            "Si no esperabas este correo, puedes ignorarlo: tu cuenta no se "
+            "activará sin tu contraseña."
+        ),
+    )
+
+
+def render_login_code_email(
+    *, app_name: str, full_name: str, code: str, minutes: int
+) -> str:
+    app = escape(app_name)
+    name = escape(full_name)
+    digits = escape(code)
+
+    rows = f"""\
         <tr>
-          <td style="padding:18px 32px;border-top:1px solid {_LINE};font-family:{_FONT};font-size:12px;line-height:1.5;color:#8a97ad;">Si no esperabas este correo, puedes ignorarlo: tu cuenta no se activará sin tu contraseña.</td>
-        </tr>
-      </table>
-    </td>
-  </tr>
-</table>
-</body>
-</html>
-"""
+          <td style="padding:36px 32px 32px;font-family:{_FONT};color:{_INK};">
+            <h1 style="margin:0 0 16px;font-size:22px;font-weight:600;line-height:1.3;">Tu código de verificación</h1>
+            <p style="margin:0 0 14px;font-size:15px;line-height:1.6;">Hola {name},</p>
+            <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:{_MUTED};">Usa este código para terminar de iniciar sesión en <strong style="color:{_INK};">{app}</strong>:</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td align="center" style="padding:18px 12px;background:#f5f8fc;border:1px solid {_LINE};border-radius:12px;font-family:'SFMono-Regular',Menlo,Consolas,monospace;font-size:34px;font-weight:700;letter-spacing:10px;color:{_INK};">{digits}</td>
+              </tr>
+            </table>
+            <p style="margin:24px 0 0;font-size:13px;line-height:1.55;color:{_MUTED};">El código vence en <strong style="color:{_INK};">{minutes} minutos</strong> y solo puede usarse una vez. Nunca te lo pediremos por teléfono ni por chat.</p>
+          </td>
+        </tr>"""
+
+    return _layout(
+        title="Tu código de verificación",
+        preheader=f"Usa este código para terminar de iniciar sesión en {app}.",
+        app=app,
+        rows=rows,
+        footer=(
+            "Si no intentaste iniciar sesión, no compartas este código y avisa "
+            "a un administrador: alguien podría conocer tu contraseña."
+        ),
+    )

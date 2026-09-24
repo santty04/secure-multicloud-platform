@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     jwt_algorithm: str = "HS256"
 
+    # Second factor: a one-time code emailed after the password check.
+    mfa_enabled: bool = False
+    login_code_expire_minutes: int = 5
+    login_code_max_attempts: int = 5
+    login_code_max_sends: int = 3
+    login_code_resend_cooldown_seconds: int = 30
+
     # ============================================================
     # EMAIL (Resend)
     # ============================================================

@@ -84,13 +84,16 @@ def redeem_password_setup_token(db: Session, token: str) -> User | None:
 def send_password_setup_email(user: User, token: str) -> None:
     link = f"{settings.frontend_base_url.rstrip('/')}/set-password?token={token}"
     hours = settings.password_setup_token_expire_hours
-    subject = f"Activa tu cuenta en {settings.app_name}"
+    subject = f"Activa tu cuenta en {settings.email_from_name}"
     html = render_password_setup_email(
-        app_name=settings.app_name, full_name=user.full_name, link=link, hours=hours
+        app_name=settings.email_from_name,
+        full_name=user.full_name,
+        link=link,
+        hours=hours,
     )
     text = (
         f"Hola {user.full_name},\n\n"
-        f"Se creó una cuenta para ti en {settings.app_name}. "
+        f"Se creó una cuenta para ti en {settings.email_from_name}. "
         f"Define tu contraseña en el siguiente enlace:\n{link}\n\n"
         f"Este enlace vence en {hours} horas y solo puede usarse una vez.\n"
         "Si no esperabas este correo, puedes ignorarlo."
