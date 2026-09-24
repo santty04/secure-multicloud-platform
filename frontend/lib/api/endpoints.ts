@@ -2,6 +2,8 @@ import type { CloudProvider } from "@/types/domain";
 
 export const endpoints = {
   login: () => "/api/v1/auth/login",
+  loginVerify: () => "/api/v1/auth/login/verify",
+  loginResend: () => "/api/v1/auth/login/resend",
   me: () => "/api/v1/auth/me",
   passwordSetupInfo: (token: string) =>
     `/api/v1/auth/set-password/${encodeURIComponent(token)}`,

@@ -4,10 +4,13 @@ import { endpoints } from "@/lib/api/endpoints";
 import { unexpectedResponseError } from "@/lib/api/errors";
 import {
   currentUserResponseSchema,
+  loginChallengeResponseSchema,
+  loginResponseSchema,
   passwordSetupTokenInfoSchema,
   tokenResponseSchema,
   type LoginRequest,
   type SetPasswordRequest,
+  type VerifyLoginCodeRequest,
 } from "@/schemas/auth";
 import type { CurrentUser } from "@/types/domain";
 
@@ -18,7 +21,33 @@ export async function login(credentials: LoginRequest) {
     body: JSON.stringify(credentials),
   });
 
+  const parsed = loginResponseSchema.safeParse(raw);
+  if (!parsed.success) throw unexpectedResponseError();
+
+  return parsed.data;
+}
+
+export async function verifyLoginCode(payload: VerifyLoginCodeRequest) {
+  const raw = await apiFetch<unknown>(endpoints.loginVerify(), {
+    method: "POST",
+    auth: false,
+    body: JSON.stringify(payload),
+  });
+
   const parsed = tokenResponseSchema.safeParse(raw);
+  if (!parsed.success) throw unexpectedResponseError();
+
+  return parsed.data;
+}
+
+export async function resendLoginCode(challengeId: string) {
+  const raw = await apiFetch<unknown>(endpoints.loginResend(), {
+    method: "POST",
+    auth: false,
+    body: JSON.stringify({ challenge_id: challengeId }),
+  });
+
+  const parsed = loginChallengeResponseSchema.safeParse(raw);
   if (!parsed.success) throw unexpectedResponseError();
 
   return parsed.data;

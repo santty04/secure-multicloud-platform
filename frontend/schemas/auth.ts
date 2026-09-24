@@ -13,6 +13,26 @@ export const tokenResponseSchema = z.object({
 });
 export type TokenResponse = z.infer<typeof tokenResponseSchema>;
 
+/** `LoginChallengeResponse` — POST /api/v1/auth/login when MFA is enabled */
+export const loginChallengeResponseSchema = z.object({
+  mfa_required: z.literal(true),
+  challenge_id: z.string(),
+  email_hint: z.string(),
+  expires_in_seconds: z.number().int(),
+  resend_available_in_seconds: z.number().int(),
+});
+export type LoginChallenge = z.infer<typeof loginChallengeResponseSchema>;
+
+/** POST /api/v1/auth/login returns a token, or a challenge when MFA is on. */
+export const loginResponseSchema = z.union([loginChallengeResponseSchema, tokenResponseSchema]);
+
+/** `VerifyLoginCodeRequest` — POST /api/v1/auth/login/verify */
+export const verifyLoginCodeRequestSchema = z.object({
+  challenge_id: z.string(),
+  code: z.string().regex(/^\d{6}$/),
+});
+export type VerifyLoginCodeRequest = z.infer<typeof verifyLoginCodeRequestSchema>;
+
 /** `SetPasswordRequest` — POST /api/v1/auth/set-password */
 export const setPasswordRequestSchema = z.object({
   token: z.string().min(1),
