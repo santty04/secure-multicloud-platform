@@ -214,6 +214,17 @@ def update_user(
         raise HTTPException(
             409, "No puedes desactivar tu cuenta ni quitarte el acceso de gestión."
         )
+    # Managing users must not double as a way to grant yourself infrastructure
+    # access: only another administrator can change your cloud roles.
+    if user.id == actor.id and (
+        payload.azure_role_id != user.azure_role_id
+        or payload.aws_role_id != user.aws_role_id
+    ):
+        raise HTTPException(
+            409,
+            "No puedes cambiar tu propio acceso a las nubes. "
+            "Pídeselo a otro administrador.",
+        )
     if db.scalar(
         select(User.id).where(
             func.lower(User.email) == payload.email, User.id != user.id
