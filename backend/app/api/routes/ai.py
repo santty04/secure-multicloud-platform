@@ -9,11 +9,20 @@ from app.ai.errors import (
     AIServiceUnavailableError,
 )
 from app.ai.factory import get_ai_provider
-from app.ai.service import generate_infrastructure_recommendation
-from app.api.dependencies import require_any_cloud_permission
+from app.ai.service import (
+    generate_infrastructure_recommendation,
+    process_multicloud_chat,
+)
+from app.api.dependencies import (
+    CurrentUser,
+    DatabaseSession,
+    require_any_cloud_permission,
+)
 from app.core.config import settings
 from app.db.models import User
 from app.schemas.ai import (
+    AIChatRequest,
+    AIChatResponse,
     AIHealthResponse,
     InfrastructureAdvisorRequest,
     InfrastructureAdvisorResponse,
@@ -57,6 +66,42 @@ async def get_ai_health(
         model=settings.ollama_model,
         available=available,
     )
+
+
+@router.post(
+    "/chat",
+    response_model=AIChatResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def multicloud_chat(
+    payload: AIChatRequest,
+    current_user: CurrentUser,
+    db: DatabaseSession,
+) -> AIChatResponse:
+    try:
+        return await process_multicloud_chat(
+            payload,
+            current_user=current_user,
+            db=db,
+        )
+
+    except AIConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI provider configuration is unavailable.",
+        ) from exc
+
+    except AIServiceUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI multicloud assistant is temporarily unavailable.",
+        ) from exc
+
+    except AIInvalidResponseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="AI multicloud assistant returned an invalid response.",
+        ) from exc
 
 
 @router.post(

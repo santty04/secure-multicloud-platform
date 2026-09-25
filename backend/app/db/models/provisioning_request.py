@@ -114,6 +114,11 @@ class ProvisioningRequest(Base):
         nullable=False,
     )
 
+    requested_name: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+
     provider_preference: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,

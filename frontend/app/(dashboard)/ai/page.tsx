@@ -15,20 +15,35 @@ import { Button } from "@/components/ui/button";
 import { cloudsWith } from "@/features/auth/can";
 import { useCurrentUser } from "@/features/auth/use-current-user";
 import {
+  useAIChat,
   useApproveProvisioningRequest,
   useCreateProvisioningRequest,
   useExecuteProvisioningRequest,
-  useInfrastructureAdvisor,
   useRejectProvisioningRequest,
 } from "@/features/ai/use-ai-advisor";
+import {
+  useStartInstance,
+  useStopInstance,
+} from "@/features/instances/use-instance-action";
 import { isApiError } from "@/lib/api/errors";
 import type {
+  AIActionTarget,
   InfrastructureAdvisorRequest,
   ProvisioningRequestResponse,
 } from "@/schemas/ai";
 
 type AIProviderChoice = "gemini" | "ollama";
 type ProviderChoice = "auto" | "aws" | "azure";
+
+type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+};
+
+function messageId() {
+  return crypto.randomUUID();
+}
 
 function errorMessage(error: unknown): string {
   if (isApiError(error)) {
@@ -38,47 +53,57 @@ function errorMessage(error: unknown): string {
   return "No se pudo completar la solicitud.";
 }
 
+function providerLabel(provider: "azure" | "aws") {
+  return provider === "azure" ? "Azure" : "AWS";
+}
+
 export default function AIPage() {
   const currentUserQuery = useCurrentUser();
 
-  const advisor = useInfrastructureAdvisor();
+  const chat = useAIChat();
   const createRequest = useCreateProvisioningRequest();
   const approveRequest = useApproveProvisioningRequest();
   const rejectRequest = useRejectProvisioningRequest();
   const executeRequest = useExecuteProvisioningRequest();
 
+  const startInstance = useStartInstance();
+  const stopInstance = useStopInstance();
+
   const [prompt, setPrompt] = useState("");
-  const [aiProvider, setAiProvider] =
-    useState<AIProviderChoice>("gemini");
-  const [submittedPrompt, setSubmittedPrompt] = useState<string | null>(null);
+  const [aiProvider, setAiProvider] = useState<AIProviderChoice>("gemini");
   const [provider, setProvider] = useState<ProviderChoice>("auto");
+
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: "welcome",
+      role: "assistant",
+      text:
+        "Hola. Soy el Asistente Multicloud de Secure Multicloud. " +
+        "Puedo consultar los recursos que tienes autorizados y, según tus permisos, " +
+        "preparar acciones sobre máquinas virtuales.",
+    },
+  ]);
+
+  const [pendingAction, setPendingAction] = useState<AIActionTarget | null>(
+    null,
+  );
 
   const [provisioningRequest, setProvisioningRequest] =
     useState<ProvisioningRequestResponse | null>(null);
 
-  // Requests end in a VM, so only clouds with vm.create are offered.
-  const creatableClouds = cloudsWith(currentUserQuery.data, "vm.create");
-  const hasAccess = creatableClouds.length > 0;
+  const currentUser = currentUserQuery.data;
 
-  if (currentUserQuery.isPending) {
-    return (
-      <div className="flex min-h-[400px] items-center justify-center">
-        <Loader2 className="size-6 animate-spin text-smp-accent" />
-      </div>
-    );
-  }
+  const creatableClouds = cloudsWith(currentUser, "vm.create");
 
-  if (!hasAccess) {
-    return (
-      <div className="max-w-[900px] rounded-xl border border-smp-danger/30 bg-smp-surface p-6">
-        <h1 className="text-xl font-semibold text-smp-ink">
-          Acceso restringido
-        </h1>
-        <p className="mt-2 text-sm text-smp-ink-muted">
-          El Asistente IA requiere el permiso vm.create en Azure o en AWS.
-        </p>
-      </div>
-    );
+  function appendAssistantMessage(text: string) {
+    setMessages((current) => [
+      ...current,
+      {
+        id: messageId(),
+        role: "assistant",
+        text,
+      },
+    ]);
   }
 
   function resetProvisioningFlow() {
@@ -89,33 +114,159 @@ export default function AIPage() {
     setProvisioningRequest(null);
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const requestText = prompt.trim();
-
-    if (requestText.length < 10) {
+  function beginProvisioning(
+    requestText: string,
+    selectedProvider: ProviderChoice,
+    requestedName: string | null = null,
+    useCatalogDefaults = false,
+  ) {
+    if (creatableClouds.length === 0) {
       return;
     }
+
+    if (requestText.length < 10) {
+      appendAssistantMessage(
+        "Para crear una máquina virtual necesito una descripción un poco más detallada.",
+      );
+      return;
+    }
+
+    const providerPreference =
+      selectedProvider === "auto"
+        ? creatableClouds.length === 1
+          ? creatableClouds[0]
+          : null
+        : selectedProvider;
+
+    if (useCatalogDefaults && providerPreference === null) {
+      appendAssistantMessage(
+        "Indica si deseas crear la VM en Azure o AWS.",
+      );
+      return;
+    }
+
+    resetProvisioningFlow();
 
     const payload: InfrastructureAdvisorRequest = {
       ai_provider: aiProvider,
       request: requestText,
-      provider_preference:
-        provider === "auto" ? null : provider,
+      provider_preference: providerPreference,
       environment: "dev",
+      requested_name: requestedName,
+      use_catalog_defaults: useCatalogDefaults,
     };
-
-    resetProvisioningFlow();
-
-    setSubmittedPrompt(requestText);
-    setPrompt("");
 
     createRequest.mutate(payload, {
       onSuccess: (result) => {
         setProvisioningRequest(result);
       },
     });
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const requestText = prompt.trim();
+
+    if (requestText.length < 2) {
+      return;
+    }
+
+    const selectedProvider = provider;
+
+    setPrompt("");
+    setPendingAction(null);
+
+    setMessages((current) => [
+      ...current,
+      {
+        id: messageId(),
+        role: "user",
+        text: requestText,
+      },
+    ]);
+
+    chat.mutate(
+      {
+        ai_provider: aiProvider,
+        message: requestText,
+      },
+      {
+        onSuccess: (response) => {
+          appendAssistantMessage(response.message);
+
+          if (response.requires_confirmation && response.target_action) {
+            setPendingAction(response.target_action);
+          }
+
+          if (response.intent === "create_vm" && creatableClouds.length > 0) {
+            const provisioningProvider =
+              selectedProvider === "auto"
+                ? response.provider ?? "auto"
+                : selectedProvider;
+
+            beginProvisioning(
+              requestText,
+              provisioningProvider,
+              response.requested_name,
+              true,
+            );
+          }
+        },
+        onError: (error) => {
+          appendAssistantMessage(errorMessage(error));
+        },
+      },
+    );
+  }
+
+  function handleConfirmAction() {
+    if (!pendingAction) {
+      return;
+    }
+
+    const target = pendingAction;
+
+    const mutation = target.action === "start" ? startInstance : stopInstance;
+
+    mutation.mutate(
+      {
+        provider: target.provider,
+        resourceId: target.resource_id,
+        name: target.resource_name,
+      },
+      {
+        onSuccess: (result) => {
+          setPendingAction(null);
+
+          if (result.status === "simulated") {
+            appendAssistantMessage(
+              `La acción sobre ${target.resource_name} fue registrada en modo simulado. No se modificaron recursos reales.`,
+            );
+            return;
+          }
+
+          appendAssistantMessage(
+            `${target.resource_name}: la acción fue enviada correctamente.`,
+          );
+        },
+        onError: (error) => {
+          appendAssistantMessage(errorMessage(error));
+        },
+      },
+    );
+  }
+
+  function handleCancelAction() {
+    if (!pendingAction) {
+      return;
+    }
+
+    appendAssistantMessage(
+      `Acción cancelada para ${pendingAction.resource_name}.`,
+    );
+
+    setPendingAction(null);
   }
 
   function handleApprove() {
@@ -167,6 +318,16 @@ export default function AIPage() {
       }
     : undefined;
 
+  const actionPending = startInstance.isPending || stopInstance.isPending;
+
+  if (currentUserQuery.isPending) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <Loader2 className="size-6 animate-spin text-smp-accent" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex max-w-[1100px] flex-col gap-4">
       <div>
@@ -175,32 +336,114 @@ export default function AIPage() {
         </h1>
 
         <p className="text-[13px] text-smp-ink-dim">
-          Describe la infraestructura que necesitas. La IA genera una
-          recomendación, pero cualquier aprovisionamiento requiere aprobación
-          y ejecución explícitas.
+          Consulta tus recursos multicloud y solicita acciones según los
+          permisos asignados en Azure y AWS.
         </p>
+
+        {currentUser ? (
+          <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-smp-ink-muted">
+            <span className="rounded-full border border-smp-line bg-smp-surface-alt px-3 py-1">
+              Azure:{" "}
+              <strong className="font-semibold text-smp-ink">
+                {currentUser.cloudAccess.azure?.roleName ?? "Sin acceso"}
+              </strong>
+            </span>
+
+            <span className="rounded-full border border-smp-line bg-smp-surface-alt px-3 py-1">
+              AWS:{" "}
+              <strong className="font-semibold text-smp-ink">
+                {currentUser.cloudAccess.aws?.roleName ?? "Sin acceso"}
+              </strong>
+            </span>
+          </div>
+        ) : null}
       </div>
 
       <div className="flex min-h-[650px] flex-col overflow-hidden rounded-2xl border border-smp-line bg-smp-surface">
         <div className="flex-1 space-y-5 overflow-y-auto p-5">
-          <div className="flex items-start gap-3">
-            <div className="flex size-9 flex-none items-center justify-center rounded-xl bg-smp-accent">
-              <Bot className="size-5 text-white" />
-            </div>
+          {messages.map((message) =>
+            message.role === "user" ? (
+              <div key={message.id} className="flex justify-end">
+                <div className="max-w-[760px] rounded-2xl rounded-tr-sm bg-smp-accent px-4 py-3 text-sm leading-6 text-white">
+                  {message.text}
+                </div>
+              </div>
+            ) : (
+              <div key={message.id} className="flex items-start gap-3">
+                <div className="flex size-9 flex-none items-center justify-center rounded-xl bg-smp-accent">
+                  <Bot className="size-5 text-white" />
+                </div>
 
-            <div className="max-w-[780px] rounded-2xl rounded-tl-sm border border-smp-line bg-smp-surface-alt px-4 py-3">
-              <p className="text-sm leading-6 text-smp-ink">
-                Hola. Soy el asesor de infraestructura de Secure Multicloud.
-                Describe lo que necesitas desplegar y te recomendaré una
-                configuración permitida por la plataforma.
-              </p>
-            </div>
-          </div>
+                <div className="max-w-[780px] whitespace-pre-wrap rounded-2xl rounded-tl-sm border border-smp-line bg-smp-surface-alt px-4 py-3">
+                  <p className="text-sm leading-6 text-smp-ink">
+                    {message.text}
+                  </p>
+                </div>
+              </div>
+            ),
+          )}
 
-          {submittedPrompt ? (
-            <div className="flex justify-end">
-              <div className="max-w-[760px] rounded-2xl rounded-tr-sm bg-smp-accent px-4 py-3 text-sm leading-6 text-white">
-                {submittedPrompt}
+          {chat.isPending ? (
+            <div className="flex items-center gap-3 text-sm text-smp-ink-muted">
+              <Loader2 className="size-4 animate-spin" />
+              Analizando la solicitud...
+            </div>
+          ) : null}
+
+          {pendingAction ? (
+            <div className="ml-12 max-w-[820px] rounded-xl border border-smp-warning/30 bg-smp-warning/5 p-4">
+              <div className="text-xs font-semibold uppercase tracking-wide text-smp-warning-ink">
+                Confirmación requerida
+              </div>
+
+              <div className="mt-3 grid gap-2 text-sm text-smp-ink sm:grid-cols-2">
+                <div>
+                  <span className="text-smp-ink-dim">Acción:</span>{" "}
+                  <strong>
+                    {pendingAction.action === "start" ? "Iniciar" : "Detener"}
+                  </strong>
+                </div>
+
+                <div>
+                  <span className="text-smp-ink-dim">Proveedor:</span>{" "}
+                  <strong>{providerLabel(pendingAction.provider)}</strong>
+                </div>
+
+                <div>
+                  <span className="text-smp-ink-dim">Recurso:</span>{" "}
+                  <strong>{pendingAction.resource_name}</strong>
+                </div>
+
+                <div>
+                  <span className="text-smp-ink-dim">Estado actual:</span>{" "}
+                  <strong>{pendingAction.current_status}</strong>
+                </div>
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <Button
+                  type="button"
+                  onClick={handleConfirmAction}
+                  disabled={actionPending}
+                  className="bg-smp-accent text-white hover:bg-smp-accent-hover"
+                >
+                  {actionPending ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="size-4" />
+                  )}
+                  Confirmar
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleCancelAction}
+                  disabled={actionPending}
+                >
+                  <XCircle className="size-4" />
+                  Cancelar
+                </Button>
               </div>
             </div>
           ) : null}
@@ -208,13 +451,7 @@ export default function AIPage() {
           {createRequest.isPending ? (
             <div className="flex items-center gap-3 text-sm text-smp-ink-muted">
               <Loader2 className="size-4 animate-spin" />
-              Analizando requisitos y políticas de infraestructura...
-            </div>
-          ) : null}
-
-          {advisor.error ? (
-            <div className="rounded-xl border border-smp-danger/30 bg-smp-danger/5 px-4 py-3 text-sm text-smp-danger-text">
-              {errorMessage(advisor.error)}
+              Preparando la solicitud de aprovisionamiento...
             </div>
           ) : null}
 
@@ -238,6 +475,7 @@ export default function AIPage() {
                     <div className="text-[10px] uppercase tracking-wide text-smp-ink-dim">
                       Proveedor
                     </div>
+
                     <div className="mt-1 font-mono text-sm text-smp-ink">
                       {recommendation.provider.toUpperCase()}
                     </div>
@@ -247,6 +485,7 @@ export default function AIPage() {
                     <div className="text-[10px] uppercase tracking-wide text-smp-ink-dim">
                       Región
                     </div>
+
                     <div className="mt-1 font-mono text-sm text-smp-ink">
                       {recommendation.region}
                     </div>
@@ -256,6 +495,7 @@ export default function AIPage() {
                     <div className="text-[10px] uppercase tracking-wide text-smp-ink-dim">
                       Instancia
                     </div>
+
                     <div className="mt-1 font-mono text-sm text-smp-ink">
                       {recommendation.instance_type}
                     </div>
@@ -265,6 +505,7 @@ export default function AIPage() {
                     <div className="text-[10px] uppercase tracking-wide text-smp-ink-dim">
                       Disco
                     </div>
+
                     <div className="mt-1 font-mono text-sm text-smp-ink">
                       {recommendation.disk_size_gb} GB
                     </div>
@@ -293,13 +534,11 @@ export default function AIPage() {
 
                 <div className="mt-4 flex flex-wrap gap-3 text-xs text-smp-ink-dim">
                   <span>
-                    Confianza:{" "}
-                    {Math.round(recommendation.confidence * 100)}%
+                    Confianza: {Math.round(recommendation.confidence * 100)}%
                   </span>
 
                   <span>
-                    IP pública:{" "}
-                    {recommendation.public_ip ? "Sí" : "No"}
+                    IP pública: {recommendation.public_ip ? "Sí" : "No"}
                   </span>
 
                   <span>
@@ -309,9 +548,7 @@ export default function AIPage() {
                       : "Ollama Local"}
                   </span>
 
-                  <span>
-                    Modelo: {provisioningRequest?.ai_model}
-                  </span>
+                  <span>Modelo: {provisioningRequest?.ai_model}</span>
                 </div>
               </div>
             </div>
@@ -354,7 +591,6 @@ export default function AIPage() {
                     ) : (
                       <CheckCircle2 className="size-4" />
                     )}
-
                     Aprobar
                   </Button>
 
@@ -383,7 +619,6 @@ export default function AIPage() {
                     ) : (
                       <Play className="size-4" />
                     )}
-
                     Ejecutar aprovisionamiento
                   </Button>
                 </div>
@@ -435,39 +670,44 @@ export default function AIPage() {
               className="rounded-lg border border-smp-line-2 bg-smp-surface-alt px-3 py-2 text-xs text-smp-ink outline-none"
             >
               <option value="gemini">Gemini Cloud</option>
+
               <option value="ollama">Ollama Local</option>
             </select>
 
-            <select
-              value={provider}
-              onChange={(event) =>
-                setProvider(event.target.value as ProviderChoice)
-              }
-              className="rounded-lg border border-smp-line-2 bg-smp-surface-alt px-3 py-2 text-xs text-smp-ink outline-none"
-            >
-              <option value="auto">
-                {creatableClouds.length === 1
-                  ? `Proveedor: ${creatableClouds[0] === "aws" ? "AWS" : "Azure"}`
-                  : "Proveedor automático"}
-              </option>
-              {creatableClouds.length > 1 ? (
-                <>
-                  <option value="aws">AWS</option>
-                  <option value="azure">Azure</option>
-                </>
-              ) : null}
-            </select>
+            {creatableClouds.length > 0 ? (
+              <>
+                <select
+                  value={provider}
+                  onChange={(event) =>
+                    setProvider(event.target.value as ProviderChoice)
+                  }
+                  className="rounded-lg border border-smp-line-2 bg-smp-surface-alt px-3 py-2 text-xs text-smp-ink outline-none"
+                >
+                  <option value="auto">
+                    {creatableClouds.length === 1
+                      ? `Creación: ${providerLabel(creatableClouds[0])}`
+                      : "Creación: proveedor automático"}
+                  </option>
 
-            <span className="text-[11px] text-smp-ink-dim">
-              Entorno: dev
-            </span>
+                  {creatableClouds.map((cloudProvider) => (
+                    <option key={cloudProvider} value={cloudProvider}>
+                      {providerLabel(cloudProvider)}
+                    </option>
+                  ))}
+                </select>
+
+                <span className="text-[11px] text-smp-ink-dim">
+                  Entorno de creación: dev
+                </span>
+              </>
+            ) : null}
           </div>
 
           <div className="flex items-end gap-2">
             <textarea
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
-              placeholder="Ej: Necesito una máquina virtual económica y privada en Azure para una aplicación de desarrollo..."
+              placeholder="Ej: Muéstrame mis máquinas virtuales, dime el estado de vm-dev o apaga vm-pruebas..."
               rows={3}
               maxLength={4000}
               className="min-h-[82px] flex-1 resize-none rounded-xl border border-smp-line-2 bg-smp-surface-alt px-4 py-3 text-sm text-smp-ink outline-none placeholder:text-smp-ink-faint focus:border-smp-accent"
@@ -476,17 +716,17 @@ export default function AIPage() {
             <Button
               type="submit"
               disabled={
-                prompt.trim().length < 10 ||
+                prompt.trim().length < 2 ||
+                chat.isPending ||
                 createRequest.isPending
               }
               className="h-[44px] bg-smp-accent px-4 text-white hover:bg-smp-accent-hover"
             >
-              {createRequest.isPending ? (
+              {chat.isPending ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
                 <Send className="size-4" />
               )}
-
               Enviar
             </Button>
           </div>
