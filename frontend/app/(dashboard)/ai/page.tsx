@@ -10,7 +10,6 @@ import {
   Send,
   XCircle,
 } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import { cloudsWith } from "@/features/auth/can";
 import { useCurrentUser } from "@/features/auth/use-current-user";
