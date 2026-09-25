@@ -407,7 +407,7 @@ def execute_provisioning_request(
 
     request.state.correlation_id = str(provisioning_request.correlation_id)
 
-    resource_name = (
+    resource_name = provisioning_request.requested_name or (
         f"smp-{provisioning_request.provider}-{provisioning_request.id.hex[:8]}"
     )
 

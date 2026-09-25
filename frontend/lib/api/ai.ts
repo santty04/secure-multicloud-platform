@@ -2,8 +2,10 @@ import { apiFetch } from "@/lib/api/client";
 import { endpoints } from "@/lib/api/endpoints";
 import { unexpectedResponseError } from "@/lib/api/errors";
 import {
+  aiChatResponseSchema,
   infrastructureAdvisorResponseSchema,
   provisioningRequestResponseSchema,
+  type AIChatRequest,
   type InfrastructureAdvisorRequest,
 } from "@/schemas/ai";
 
@@ -41,9 +43,7 @@ export async function createProvisioningRequest(
   return parsed.data;
 }
 
-export async function approveProvisioningRequest(
-  requestId: string,
-) {
+export async function approveProvisioningRequest(requestId: string) {
   const raw = await apiFetch<unknown>(
     endpoints.approveProvisioningRequest(requestId),
     {
@@ -63,9 +63,7 @@ export async function approveProvisioningRequest(
   return parsed.data;
 }
 
-export async function rejectProvisioningRequest(
-  requestId: string,
-) {
+export async function rejectProvisioningRequest(requestId: string) {
   const raw = await apiFetch<unknown>(
     endpoints.rejectProvisioningRequest(requestId),
     {
@@ -85,9 +83,7 @@ export async function rejectProvisioningRequest(
   return parsed.data;
 }
 
-export async function executeProvisioningRequest(
-  requestId: string,
-) {
+export async function executeProvisioningRequest(requestId: string) {
   const raw = await apiFetch<unknown>(
     endpoints.executeProvisioningRequest(requestId),
     {
@@ -104,12 +100,8 @@ export async function executeProvisioningRequest(
   return parsed.data;
 }
 
-export async function getProvisioningRequest(
-  requestId: string,
-) {
-  const raw = await apiFetch<unknown>(
-    endpoints.provisioningRequest(requestId),
-  );
+export async function getProvisioningRequest(requestId: string) {
+  const raw = await apiFetch<unknown>(endpoints.provisioningRequest(requestId));
 
   const parsed = provisioningRequestResponseSchema.safeParse(raw);
 
@@ -145,10 +137,7 @@ export async function executeProvisioningRequestWithRecovery(
         continue;
       }
 
-      if (
-        current.status === "executed" ||
-        current.status === "failed"
-      ) {
+      if (current.status === "executed" || current.status === "failed") {
         return current;
       }
 
@@ -159,4 +148,19 @@ export async function executeProvisioningRequestWithRecovery(
 
     throw originalError;
   }
+}
+
+export async function sendAIChatMessage(payload: AIChatRequest) {
+  const raw = await apiFetch<unknown>(endpoints.aiChat(), {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+  const parsed = aiChatResponseSchema.safeParse(raw);
+
+  if (!parsed.success) {
+    throw unexpectedResponseError();
+  }
+
+  return parsed.data;
 }

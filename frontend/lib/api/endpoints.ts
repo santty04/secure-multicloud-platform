@@ -41,4 +41,5 @@ export const endpoints = {
     `/api/v1/provisioning-requests/${requestId}/execute`,
 
   health: () => "/health",
+  aiChat: () => "/api/v1/ai/chat",
 };

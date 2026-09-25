@@ -42,13 +42,31 @@ resource "azurerm_container_app" "backend" {
     }
   }
 
+  dynamic "secret" {
+    for_each = nonsensitive(var.ollama_cf_access_client_id != "") ? [1] : []
+
+    content {
+      name  = "ollama-cf-client-id"
+      value = var.ollama_cf_access_client_id
+    }
+  }
+
+  dynamic "secret" {
+    for_each = nonsensitive(var.ollama_cf_access_client_secret != "") ? [1] : []
+
+    content {
+      name  = "ollama-cf-client-secret"
+      value = var.ollama_cf_access_client_secret
+    }
+  }
+
   template {
     min_replicas = 1
     max_replicas = 3
 
     container {
       name   = "backend"
-      image  = "${azurerm_container_registry.backend.login_server}/smp-backend:0.1.15"
+      image  = "${azurerm_container_registry.backend.login_server}/smp-backend:0.1.16"
       cpu    = 0.5
       memory = "1Gi"
 
@@ -59,12 +77,49 @@ resource "azurerm_container_app" "backend" {
 
       env {
         name  = "APP_VERSION"
-        value = "0.1.1"
+        value = "0.1.16"
       }
 
       env {
         name  = "DEBUG"
         value = "false"
+      }
+
+      # ========================================================
+      # AI ASSISTANT - OLLAMA THROUGH CLOUDFLARE ACCESS
+      # ========================================================
+
+      env {
+        name  = "AI_PROVIDER"
+        value = "ollama"
+      }
+
+      env {
+        name  = "OLLAMA_BASE_URL"
+        value = "https://ollama.sisoper.uk"
+      }
+
+      env {
+        name  = "OLLAMA_MODEL"
+        value = "qwen3:4b-instruct"
+      }
+
+      dynamic "env" {
+        for_each = nonsensitive(var.ollama_cf_access_client_id != "") ? [1] : []
+
+        content {
+          name        = "OLLAMA_CF_ACCESS_CLIENT_ID"
+          secret_name = "ollama-cf-client-id"
+        }
+      }
+
+      dynamic "env" {
+        for_each = nonsensitive(var.ollama_cf_access_client_secret != "") ? [1] : []
+
+        content {
+          name        = "OLLAMA_CF_ACCESS_CLIENT_SECRET"
+          secret_name = "ollama-cf-client-secret"
+        }
       }
 
       env {

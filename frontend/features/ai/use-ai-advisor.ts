@@ -7,6 +7,7 @@ import {
   executeProvisioningRequestWithRecovery,
   getInfrastructureRecommendation,
   rejectProvisioningRequest,
+  sendAIChatMessage,
 } from "@/lib/api/ai";
 
 export function useInfrastructureAdvisor() {
@@ -36,5 +37,11 @@ export function useRejectProvisioningRequest() {
 export function useExecuteProvisioningRequest() {
   return useMutation({
     mutationFn: executeProvisioningRequestWithRecovery,
+  });
+}
+
+export function useAIChat() {
+  return useMutation({
+    mutationFn: sendAIChatMessage,
   });
 }

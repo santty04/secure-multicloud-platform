@@ -38,6 +38,7 @@ class ProvisioningRequestResponse(BaseModel):
     reviewed_by_email: str | None
 
     original_request: str
+    requested_name: str | None
 
     provider_preference: str | None
     max_monthly_budget_usd: float | None

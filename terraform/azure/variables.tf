@@ -28,3 +28,17 @@ variable "resend_api_key" {
   sensitive   = true
   default     = ""
 }
+
+variable "ollama_cf_access_client_id" {
+  description = "Cloudflare Access Client ID used by the backend to reach Ollama."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "ollama_cf_access_client_secret" {
+  description = "Cloudflare Access Client Secret used by the backend to reach Ollama."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
