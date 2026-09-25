@@ -50,7 +50,6 @@ const NAV_ITEMS: NavItem[] = [
     href: "/ai",
     label: "Asistente IA",
     icon: Bot,
-    cloudPermission: "vm.create",
   },
 ];
 
