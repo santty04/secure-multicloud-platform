@@ -108,6 +108,8 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "qwen3:4b-instruct"
     ollama_timeout_seconds: int = 120
+    ollama_cf_access_client_id: str | None = None
+    ollama_cf_access_client_secret: str | None = None
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3.8-flash"
 
