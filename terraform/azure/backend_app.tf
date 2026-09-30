@@ -66,7 +66,7 @@ resource "azurerm_container_app" "backend" {
 
     container {
       name   = "backend"
-      image  = "${azurerm_container_registry.backend.login_server}/smp-backend:0.1.16"
+      image  = "${azurerm_container_registry.backend.login_server}/smp-backend:0.1.17"
       cpu    = 0.5
       memory = "1Gi"
 
