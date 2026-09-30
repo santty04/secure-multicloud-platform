@@ -181,6 +181,16 @@ export const handlers = [
     return HttpResponse.json(response);
   }),
 
+  http.post("/api/v1/auth/forgot-password", () =>
+    HttpResponse.json(
+      {
+        detail:
+          "Si el correo corresponde a una cuenta activa, recibirás un enlace para restablecer tu contraseña en unos minutos.",
+      },
+      { status: 202 },
+    ),
+  ),
+
   http.get("/api/v1/auth/me", ({ request }) => {
     const user = getAuthedUser(request);
     if (!user) return unauthorized();

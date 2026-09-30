@@ -8,6 +8,7 @@ export const endpoints = {
   passwordSetupInfo: (token: string) =>
     `/api/v1/auth/set-password/${encodeURIComponent(token)}`,
   setPassword: () => "/api/v1/auth/set-password",
+  forgotPassword: () => "/api/v1/auth/forgot-password",
 
   instances: () => "/api/v1/instances",
   createAwsInstance: () => "/api/v1/instances/aws",

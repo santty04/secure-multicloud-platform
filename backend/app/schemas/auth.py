@@ -40,6 +40,14 @@ class SetPasswordRequest(BaseModel):
     password: str = Field(min_length=12, max_length=128, repr=False)
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordResponse(BaseModel):
+    detail: str
+
+
 class PasswordSetupTokenInfo(BaseModel):
     email: EmailStr
     full_name: str

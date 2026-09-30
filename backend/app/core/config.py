@@ -58,6 +58,13 @@ class Settings(BaseSettings):
     frontend_base_url: str = "http://localhost:3000"
     password_setup_token_expire_hours: int = 48
 
+    # "Forgot password": reset links are short-lived, and each address can
+    # only request a few of them per window so the endpoint cannot be used to
+    # flood someone's inbox.
+    password_reset_token_expire_minutes: int = 30
+    password_reset_max_requests: int = 3
+    password_reset_window_minutes: int = 60
+
     # ============================================================
     # AZURE
     # ============================================================

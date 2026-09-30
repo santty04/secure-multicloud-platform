@@ -23,6 +23,9 @@ const EVENT_TYPES: Record<string, { label: string; tone: StatusTone }> = {
   code_failed: { label: "Código incorrecto", tone: "warning" },
   challenge_locked: { label: "Código bloqueado", tone: "danger" },
   login_throttled: { label: "Bloqueo por intentos", tone: "danger" },
+  password_reset_requested: { label: "Recuperación solicitada", tone: "info" },
+  password_reset_throttled: { label: "Recuperación limitada", tone: "warning" },
+  password_set: { label: "Contraseña definida", tone: "success" },
 };
 
 const FAILURE_REASONS: Record<string, string> = {

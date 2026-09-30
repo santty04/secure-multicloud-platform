@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import Request
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -16,6 +16,9 @@ CODE_RESENT = "code_resent"
 CODE_FAILED = "code_failed"
 CHALLENGE_LOCKED = "challenge_locked"
 LOGIN_THROTTLED = "login_throttled"
+PASSWORD_RESET_REQUESTED = "password_reset_requested"
+PASSWORD_RESET_THROTTLED = "password_reset_throttled"
+PASSWORD_SET = "password_set"
 
 # Failures that count towards the per-account lockout.
 _FAILURES = (PASSWORD_FAILED, CODE_FAILED)
@@ -90,3 +93,20 @@ def login_retry_after(db: Session, email: str) -> int | None:
     # Locked until the oldest of the last N failures leaves the window.
     unlock_at = failures[-1] + window
     return max(1, int((unlock_at - datetime.now(UTC)).total_seconds()) + 1)
+
+
+def password_reset_allowed(db: Session, email: str) -> bool:
+    """Whether `email` may be sent another reset link in the current window."""
+    since = datetime.now(UTC) - timedelta(
+        minutes=settings.password_reset_window_minutes
+    )
+    requests = db.scalar(
+        select(func.count())
+        .select_from(AuthEvent)
+        .where(
+            AuthEvent.email == email,
+            AuthEvent.event_type == PASSWORD_RESET_REQUESTED,
+            AuthEvent.created_at >= since,
+        )
+    )
+    return requests < settings.password_reset_max_requests

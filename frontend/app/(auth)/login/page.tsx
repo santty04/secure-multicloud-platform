@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Eye, EyeOff } from "lucide-react";
 import { AuthHeroPanel, AuthMobileBrand } from "@/components/auth/auth-hero-panel";
@@ -119,9 +120,17 @@ export default function LoginPage() {
               </div>
 
               <div className="flex flex-col gap-[7px]">
-                <label htmlFor="smp-pass" className="text-[12px] font-semibold text-[#c3d0e6]">
-                  Contraseña
-                </label>
+                <div className="flex items-baseline justify-between gap-3">
+                  <label htmlFor="smp-pass" className="text-[12px] font-semibold text-[#c3d0e6]">
+                    Contraseña
+                  </label>
+                  <Link
+                    href="/forgot-password"
+                    className="text-[12px] font-medium text-smp-accent-soft hover:underline"
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </Link>
+                </div>
                 <div className="relative flex">
                   <input
                     id="smp-pass"
