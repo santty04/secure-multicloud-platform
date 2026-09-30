@@ -18,8 +18,10 @@ export function ConfirmDialog({
   cancelLabel = "Cancelar",
   isDestructive,
   isLoading,
+  confirmDisabled,
   onConfirm,
   onCancel,
+  children,
 }: {
   open: boolean;
   title: string;
@@ -29,8 +31,12 @@ export function ConfirmDialog({
   cancelLabel?: string;
   isDestructive?: boolean;
   isLoading?: boolean;
+  /** Keeps the confirm button disabled, e.g. until a typed confirmation matches. */
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Extra content rendered between the description and the buttons. */
+  children?: React.ReactNode;
 }) {
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
@@ -51,6 +57,7 @@ export function ConfirmDialog({
             {code}
           </code>
         ) : null}
+        {children}
         <DialogFooter>
           <Button
             variant="outline"
@@ -61,7 +68,7 @@ export function ConfirmDialog({
           </Button>
           <Button
             onClick={onConfirm}
-            disabled={isLoading}
+            disabled={isLoading || confirmDisabled}
             className={
               isDestructive
                 ? "bg-smp-danger-strong text-white hover:bg-smp-danger-hover"
