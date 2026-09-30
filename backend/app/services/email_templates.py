@@ -128,3 +128,45 @@ def render_login_code_email(
             "a un administrador: alguien podría conocer tu contraseña."
         ),
     )
+
+
+def render_password_reset_email(
+    *, app_name: str, full_name: str, link: str, minutes: int
+) -> str:
+    app = escape(app_name)
+    name = escape(full_name)
+    href = escape(link, quote=True)
+
+    rows = f"""\
+        <tr>
+          <td style="padding:36px 32px 8px;font-family:{_FONT};color:{_INK};">
+            <h1 style="margin:0 0 16px;font-size:22px;font-weight:600;line-height:1.3;">Restablece tu contraseña</h1>
+            <p style="margin:0 0 14px;font-size:15px;line-height:1.6;">Hola {name},</p>
+            <p style="margin:0 0 28px;font-size:15px;line-height:1.6;color:{_MUTED};">Recibimos una solicitud para restablecer la contraseña de tu cuenta en <strong style="color:{_INK};">{app}</strong>. Usa el botón para definir una nueva.</p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td align="center" bgcolor="{_ACCENT}" style="border-radius:10px;">
+                  <a href="{href}" target="_blank" style="display:inline-block;padding:13px 28px;font-family:{_FONT};font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:10px;">Restablecer contraseña</a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:28px 0 0;padding:14px 16px;background:#f5f8fc;border-radius:10px;font-size:13px;line-height:1.55;color:{_MUTED};">Este enlace vence en <strong style="color:{_INK};">{minutes} minutos</strong> y solo puede usarse una vez.</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:24px 32px 32px;font-family:{_FONT};">
+            <p style="margin:0 0 6px;font-size:12.5px;line-height:1.5;color:{_MUTED};">Si el botón no funciona, copia y pega este enlace en tu navegador:</p>
+            <p style="margin:0;font-size:12.5px;line-height:1.5;word-break:break-all;"><a href="{href}" target="_blank" style="color:{_ACCENT};text-decoration:underline;">{href}</a></p>
+          </td>
+        </tr>"""
+
+    return _layout(
+        title="Restablece tu contraseña",
+        preheader=f"Define una nueva contraseña para {app}.",
+        app=app,
+        rows=rows,
+        footer=(
+            "Si no solicitaste este cambio, ignora este correo: tu contraseña "
+            "actual sigue siendo válida. Si se repite, avisa a un administrador."
+        ),
+    )

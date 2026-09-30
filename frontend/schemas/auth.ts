@@ -33,6 +33,17 @@ export const verifyLoginCodeRequestSchema = z.object({
 });
 export type VerifyLoginCodeRequest = z.infer<typeof verifyLoginCodeRequestSchema>;
 
+/** `ForgotPasswordRequest` — POST /api/v1/auth/forgot-password */
+export const forgotPasswordRequestSchema = z.object({
+  email: z.string().trim().email(),
+});
+export type ForgotPasswordRequest = z.infer<typeof forgotPasswordRequestSchema>;
+
+/** `ForgotPasswordResponse` — same answer whether or not the account exists. */
+export const forgotPasswordResponseSchema = z.object({
+  detail: z.string(),
+});
+
 /** `SetPasswordRequest` — POST /api/v1/auth/set-password */
 export const setPasswordRequestSchema = z.object({
   token: z.string().min(1),

@@ -8,7 +8,10 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.models import PasswordSetupToken, User
 from app.services.email import send_email
-from app.services.email_templates import render_password_setup_email
+from app.services.email_templates import (
+    render_password_reset_email,
+    render_password_setup_email,
+)
 
 _TOKEN_BYTES = 32
 
@@ -17,8 +20,14 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def issue_password_setup_token(db: Session, user: User) -> str:
-    """Create a fresh one-time token for `user`, invalidating any outstanding ones."""
+def issue_password_setup_token(
+    db: Session, user: User, *, expires_in: timedelta | None = None
+) -> str:
+    """Create a fresh one-time token for `user`, invalidating any outstanding ones.
+
+    Activation and "forgot password" share this token: both let the holder of
+    the mailbox pick a new password. Only the lifetime differs.
+    """
     db.execute(
         update(PasswordSetupToken)
         .where(
@@ -29,9 +38,9 @@ def issue_password_setup_token(db: Session, user: User) -> str:
     )
 
     token = secrets.token_urlsafe(_TOKEN_BYTES)
-    expires_at = datetime.now(UTC) + timedelta(
-        hours=settings.password_setup_token_expire_hours
-    )
+    if expires_in is None:
+        expires_in = timedelta(hours=settings.password_setup_token_expire_hours)
+    expires_at = datetime.now(UTC) + expires_in
     db.add(
         PasswordSetupToken(
             user_id=user.id,
@@ -97,5 +106,38 @@ def send_password_setup_email(user: User, token: str) -> None:
         f"Define tu contraseña en el siguiente enlace:\n{link}\n\n"
         f"Este enlace vence en {hours} horas y solo puede usarse una vez.\n"
         "Si no esperabas este correo, puedes ignorarlo."
+    )
+    send_email(to=user.email, subject=subject, html=html, text=text)
+
+
+def issue_password_reset_token(db: Session, user: User) -> str:
+    return issue_password_setup_token(
+        db,
+        user,
+        expires_in=timedelta(minutes=settings.password_reset_token_expire_minutes),
+    )
+
+
+def send_password_reset_email(user: User, token: str) -> None:
+    link = (
+        f"{settings.frontend_base_url.rstrip('/')}/set-password"
+        f"?token={token}&mode=reset"
+    )
+    minutes = settings.password_reset_token_expire_minutes
+    subject = f"Restablece tu contraseña en {settings.email_from_name}"
+    html = render_password_reset_email(
+        app_name=settings.email_from_name,
+        full_name=user.full_name,
+        link=link,
+        minutes=minutes,
+    )
+    text = (
+        f"Hola {user.full_name},\n\n"
+        f"Recibimos una solicitud para restablecer tu contraseña en "
+        f"{settings.email_from_name}. Define una nueva en el siguiente enlace:\n"
+        f"{link}\n\n"
+        f"Este enlace vence en {minutes} minutos y solo puede usarse una vez.\n"
+        "Si no lo solicitaste, ignora este correo: tu contraseña actual sigue "
+        "siendo válida."
     )
     send_email(to=user.email, subject=subject, html=html, text=text)

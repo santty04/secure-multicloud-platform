@@ -4,10 +4,12 @@ import { endpoints } from "@/lib/api/endpoints";
 import { unexpectedResponseError } from "@/lib/api/errors";
 import {
   currentUserResponseSchema,
+  forgotPasswordResponseSchema,
   loginChallengeResponseSchema,
   loginResponseSchema,
   passwordSetupTokenInfoSchema,
   tokenResponseSchema,
+  type ForgotPasswordRequest,
   type LoginRequest,
   type SetPasswordRequest,
   type VerifyLoginCodeRequest,
@@ -72,6 +74,19 @@ export async function setPassword(payload: SetPasswordRequest) {
   });
 
   const parsed = tokenResponseSchema.safeParse(raw);
+  if (!parsed.success) throw unexpectedResponseError();
+
+  return parsed.data;
+}
+
+export async function requestPasswordReset(payload: ForgotPasswordRequest) {
+  const raw = await apiFetch<unknown>(endpoints.forgotPassword(), {
+    method: "POST",
+    auth: false,
+    body: JSON.stringify(payload),
+  });
+
+  const parsed = forgotPasswordResponseSchema.safeParse(raw);
   if (!parsed.success) throw unexpectedResponseError();
 
   return parsed.data;
