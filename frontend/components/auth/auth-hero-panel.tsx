@@ -1,4 +1,4 @@
-import { ShieldCheck } from "lucide-react";
+import { Lock, ShieldCheck } from "lucide-react";
 
 /** Shared branding panel for the `(auth)` route group (login, set-password). */
 export function AuthHeroPanel() {
@@ -57,8 +57,12 @@ export function AuthHeroPanel() {
         </div>
       </div>
 
-      <div className="relative font-mono text-[11.5px] text-smp-ink-faint">
-        v0.9.0-demo · Plataforma segura multicloud
+      <div className="relative flex items-center justify-between gap-4 text-[12px] text-smp-ink-faint">
+        <span className="inline-flex items-center gap-2">
+          <Lock size={13} strokeWidth={2} aria-hidden="true" />
+          Conexión cifrada · Verificación en dos pasos
+        </span>
+        <span>© {new Date().getFullYear()} Secure Multicloud Platform</span>
       </div>
     </div>
   );
