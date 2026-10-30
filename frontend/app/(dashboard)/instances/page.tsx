@@ -231,10 +231,6 @@ export default function InstancesPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-smp-warning/30 bg-smp-warning/8 px-3.5 py-2.5 text-[12px] text-smp-warning-ink">
-        Algunas acciones pueden ejecutarse en modo simulado según la configuración del proveedor.
-      </div>
-
       <InstanceFilters
         search={search}
         onSearchChange={setSearch}
