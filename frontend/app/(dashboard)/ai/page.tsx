@@ -93,6 +93,7 @@ export default function AIPage() {
   const currentUser = currentUserQuery.data;
 
   const creatableClouds = cloudsWith(currentUser, "vm.create");
+  const providerMissing = creatableClouds.length > 0 && provider === "auto";
 
   function appendAssistantMessage(text: string) {
     setMessages((current) => [
@@ -167,7 +168,7 @@ export default function AIPage() {
 
     const requestText = prompt.trim();
 
-    if (requestText.length < 2) {
+    if (requestText.length < 2 || providerMissing) {
       return;
     }
 
@@ -680,12 +681,14 @@ export default function AIPage() {
                   onChange={(event) =>
                     setProvider(event.target.value as ProviderChoice)
                   }
-                  className="rounded-lg border border-smp-line-2 bg-smp-surface-alt px-3 py-2 text-xs text-smp-ink outline-none"
+                  required
+                  aria-invalid={providerMissing}
+                  className={`rounded-lg border bg-smp-surface-alt px-3 py-2 text-xs text-smp-ink outline-none ${
+                    providerMissing ? "border-smp-warning" : "border-smp-line-2"
+                  }`}
                 >
-                  <option value="auto">
-                    {creatableClouds.length === 1
-                      ? `Creación: ${providerLabel(creatableClouds[0])}`
-                      : "Creación: proveedor automático"}
+                  <option value="auto" disabled>
+                    Seleccione opción
                   </option>
 
                   {creatableClouds.map((cloudProvider) => (
@@ -698,6 +701,12 @@ export default function AIPage() {
                 <span className="text-[11px] text-smp-ink-dim">
                   Entorno de creación: dev
                 </span>
+
+                {providerMissing ? (
+                  <span className="text-[11px] text-smp-warning-ink">
+                    Selecciona un proveedor para continuar
+                  </span>
+                ) : null}
               </>
             ) : null}
           </div>
@@ -716,6 +725,7 @@ export default function AIPage() {
               type="submit"
               disabled={
                 prompt.trim().length < 2 ||
+                providerMissing ||
                 chat.isPending ||
                 createRequest.isPending
               }
